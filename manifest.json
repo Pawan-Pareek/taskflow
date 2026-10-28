@@ -1,0 +1,23 @@
+{
+  "name": "TaskFlow Pro",
+  "short_name": "TaskFlow",
+  "description": "Ultra-fast, beautiful, authenticated todo list synchronized seamlessly between mobile and laptop.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#090d16",
+  "theme_color": "#090d16",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "icons/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "favicon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}

@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>TaskFlow Pro — Seamless Cross-Device Todo App</title>
+    <meta name="description" content="Ultra-fast, beautiful, authenticated todo list synchronized seamlessly between mobile and laptop.">
+    <meta name="theme-color" content="#090d16">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="TaskFlow">
+
+    <!-- Icons & Manifest -->
+    <link rel="icon" type="image/png" href="favicon.png">
+    <link rel="apple-touch-icon" href="icons/icon.png">
+    <link rel="manifest" href="manifest.json">
+
+    <!-- Modern Typography: Outfit (Headings) & Inter (Body) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Stylesheet -->
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Drawer Overlay (Mobile) -->
+        <div id="drawer-overlay" class="drawer-overlay hidden"></div>
+
+        <!-- Sidebar (Desktop Sticky / Mobile Drawer) -->
+        <aside id="app-sidebar" class="sidebar">
+            <div class="brand-section">
+                <img src="favicon.png" alt="TaskFlow Logo" class="brand-logo-img">
+                <div class="brand-text">
+                    <h1>TaskFlow</h1>
+                </div>
+                <span class="brand-badge">Pro</span>
+            </div>
+
+            <!-- User Profile Card -->
+            <div class="user-profile-card">
+                <div class="user-avatar-badge">⚡</div>
+                <div class="user-info">
+                    <div class="user-display-name">Alex Rivera</div>
+                    <div class="user-sync-status">
+                        <span id="sync-status-badge" class="status-indicator online"></span>
+                        <span id="sync-status-text">Server Synced</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- View Filters -->
+            <div class="nav-group-title">Views</div>
+            <ul class="nav-list">
+                <li>
+                    <button type="button" class="nav-item-btn active" data-filter="today" id="nav-filter-today">
+                        <span class="nav-icon">☀️</span>
+                        <span class="nav-label">Today's Focus</span>
+                        <span class="nav-badge-count" id="count-today">0</span>
+                    </button>
+                </li>
+                <li>
+                    <button type="button" class="nav-item-btn" data-filter="upcoming" id="nav-filter-upcoming">
+                        <span class="nav-icon">📅</span>
+                        <span class="nav-label">Upcoming</span>
+                        <span class="nav-badge-count" id="count-upcoming">0</span>
+                    </button>
+                </li>
+                <li>
+                    <button type="button" class="nav-item-btn" data-filter="all" id="nav-filter-all">
+                        <span class="nav-icon">📋</span>
+                        <span class="nav-label">All Tasks</span>
+                        <span class="nav-badge-count" id="count-all">0</span>
+                    </button>
+                </li>
+                <li>
+                    <button type="button" class="nav-item-btn" data-filter="starred" id="nav-filter-starred">
+                        <span class="nav-icon">⭐</span>
+                        <span class="nav-label">Starred</span>
+                        <span class="nav-badge-count" id="count-starred">0</span>
+                    </button>
+                </li>
+                <li>
+                    <button type="button" class="nav-item-btn" data-filter="completed" id="nav-filter-completed">
+                        <span class="nav-icon">✅</span>
+                        <span class="nav-label">Completed</span>
+                        <span class="nav-badge-count" id="count-completed">0</span>
+                    </button>
+                </li>
+            </ul>
+
+            <!-- Categories -->
+            <div class="nav-group-title">Categories</div>
+            <ul class="nav-list">
+                <li>
+                    <button type="button" class="nav-item-btn" data-category="personal" id="cat-filter-personal">
+                        <span class="category-dot" style="background: #8b5cf6;"></span>
+                        <span class="nav-label">Personal</span>
+                    </button>
+                </li>
+                <li>
+                    <button type="button" class="nav-item-btn" data-category="work" id="cat-filter-work">
+                        <span class="category-dot" style="background: #3b82f6;"></span>
+                        <span class="nav-label">Work</span>
+                    </button>
+                </li>
+                <li>
+                    <button type="button" class="nav-item-btn" data-category="shopping" id="cat-filter-shopping">
+                        <span class="category-dot" style="background: #10b981;"></span>
+                        <span class="nav-label">Shopping</span>
+                    </button>
+                </li>
+                <li>
+                    <button type="button" class="nav-item-btn" data-category="health" id="cat-filter-health">
+                        <span class="category-dot" style="background: #f59e0b;"></span>
+                        <span class="nav-label">Health</span>
+                    </button>
+                </li>
+                <li>
+                    <button type="button" class="nav-item-btn" data-category="learning" id="cat-filter-learning">
+                        <span class="category-dot" style="background: #ec4899;"></span>
+                        <span class="nav-label">Learning</span>
+                    </button>
+                </li>
+            </ul>
+
+            <!-- Sidebar Footer & Mobile Link -->
+            <div class="sidebar-footer">
+                <!-- Daily Goal Progress -->
+                <div class="daily-progress-card">
+                    <div class="progress-header">
+                        <span class="progress-header-title">Today's Progress</span>
+                        <span id="progress-percentage-text" class="progress-percentage">0%</span>
+                    </div>
+                    <div class="progress-track">
+                        <div id="progress-bar-fill" class="progress-fill"></div>
+                    </div>
+                    <div id="progress-ratio-text" class="progress-caption">0 of 0 completed</div>
+                </div>
+
+                <!-- Connect Mobile Button -->
+                <button type="button" class="btn-connect-mobile-sidebar btn-open-connect-mobile" id="btn-sidebar-connect-mobile">
+                    <span>📱</span>
+                    <span>Connect Phone</span>
+                </button>
+
+                <!-- Logout Button -->
+                <button type="button" class="nav-item-btn btn-logout-action" id="btn-sidebar-logout" style="color: var(--text-muted); padding: 8px 14px;">
+                    <span class="nav-icon">🚪</span>
+                    <span class="nav-label">Sign Out</span>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content Feed -->
+        <main class="main-content">
+            <!-- Top Action Bar -->
+            <header class="top-bar">
+                <div class="mobile-bar-left">
+                    <button type="button" id="btn-open-drawer" class="icon-btn-round" aria-label="Open navigation drawer">
+                        ☰
+                    </button>
+                    <img src="favicon.png" alt="TaskFlow" style="width: 28px; height: 28px; border-radius: 6px;">
+                </div>
+
+                <div class="search-bar-container">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" id="global-search-input" class="search-input" placeholder="Search tasks, notes, categories...">
+                    <kbd class="search-kbd-hint">/</kbd>
+                </div>
+
+                <div class="top-actions-cluster">
+                    <button type="button" class="icon-btn-round btn-open-connect-mobile" id="btn-topbar-connect" title="Connect Mobile Phone">
+                        📱
+                    </button>
+                    <button type="button" class="icon-btn-round btn-sound-toggle" id="btn-topbar-sound" title="Toggle Sound FX">
+                        🔔
+                    </button>
+                    <button type="button" class="icon-btn-round btn-theme-toggle" id="btn-topbar-theme" title="Toggle Light/Dark Theme">
+                        ☀️
+                    </button>
+                    <button type="button" class="icon-btn-round" id="btn-open-settings" title="Settings & Backup">
+                        ⚙️
+                    </button>
+                </div>
+            </header>
+
+            <!-- Current View Heading Banner -->
+            <section class="view-header">
+                <div class="view-heading">
+                    <h2 id="current-view-title">Today’s Focus</h2>
+                    <div id="current-view-date" class="view-subheading">Loading date...</div>
+                </div>
+                <div class="sort-container">
+                    <span>Sort by:</span>
+                    <select id="sort-selector" class="sort-select">
+                        <option value="priority">Priority</option>
+                        <option value="dueDate">Due Date</option>
+                        <option value="createdAt">Newest</option>
+                        <option value="alphabetical">Title (A-Z)</option>
+                    </select>
+                </div>
+            </section>
+
+            <!-- Quick Add Task Card -->
+            <section class="quick-add-card">
+                <form id="quick-add-form">
+                    <div class="quick-add-input-row">
+                        <span class="quick-add-bullet">✦</span>
+                        <input type="text" id="quick-add-input" class="quick-add-input" placeholder="Add a new task... (Press 'N' or Enter)" autocomplete="off">
+                    </div>
+                    <div class="quick-add-controls">
+                        <div class="quick-options-left">
+                            <select id="quick-priority-select" class="quick-pill-select" title="Priority">
+                                <option value="urgent">🔥 Urgent</option>
+                                <option value="high">⚡ High</option>
+                                <option value="medium" selected>🔷 Medium</option>
+                                <option value="low">☕ Low</option>
+                            </select>
+                            <select id="quick-category-select" class="quick-pill-select" title="Category">
+                                <option value="personal" selected>👤 Personal</option>
+                                <option value="work">💼 Work</option>
+                                <option value="shopping">🛒 Shopping</option>
+                                <option value="health">🏃 Health</option>
+                                <option value="learning">📚 Learning</option>
+                            </select>
+                            <input type="date" id="quick-due-date" class="quick-date-picker" title="Due Date">
+                        </div>
+                        <button type="button" class="btn-primary-gradient" id="btn-quick-add-submit">
+                            <span>Add Task</span>
+                            <span>↵</span>
+                        </button>
+                    </div>
+                </form>
+            </section>
+
+            <!-- Task List Feed -->
+            <section id="task-list" class="task-list">
+                <!-- Dynamically populated by js/app.js -->
+            </section>
+        </main>
+
+        <!-- Mobile Bottom Nav Bar (Thumb-friendly for phones) -->
+        <nav class="mobile-bottom-nav">
+            <div class="mobile-nav-inner">
+                <button type="button" class="mobile-nav-btn active" data-filter="today" id="mob-nav-today">
+                    <span class="mobile-nav-icon">☀️</span>
+                    <span>Today</span>
+                </button>
+                <button type="button" class="mobile-nav-btn" data-filter="all" id="mob-nav-all">
+                    <span class="mobile-nav-icon">📋</span>
+                    <span>All</span>
+                </button>
+                <button type="button" class="mobile-fab-add" id="mob-fab-add" onclick="document.getElementById('quick-add-input').focus();" aria-label="Add new task">
+                    +
+                </button>
+                <button type="button" class="mobile-nav-btn" data-filter="starred" id="mob-nav-starred">
+                    <span class="mobile-nav-icon">⭐</span>
+                    <span>Starred</span>
+                </button>
+                <button type="button" class="mobile-nav-btn" id="mob-nav-drawer" onclick="TaskApp.openDrawer();">
+                    <span class="mobile-nav-icon">☰</span>
+                    <span>Menu</span>
+                </button>
+            </div>
+        </nav>
+    </div>
+
+    <!-- ======================================================================
+         MODALS
+         ====================================================================== -->
+
+    <!-- 1. Authentication Modal -->
+    <div id="auth-modal" class="modal-backdrop hidden">
+        <div class="modal-card">
+            <div class="auth-header">
+                <img src="favicon.png" alt="TaskFlow Logo" class="auth-header-logo">
+                <h3 id="auth-modal-title">Welcome to TaskFlow</h3>
+                <p id="auth-modal-subtitle" style="color: var(--text-muted); font-size: 0.88rem; margin-top: 4px;">
+                    Sign in to sync your tasks between mobile and laptop
+                </p>
+            </div>
+
+            <!-- Login / Register Switch Tabs -->
+            <div class="auth-tabs">
+                <button type="button" id="tab-btn-login" class="auth-tab-btn active">Sign In</button>
+                <button type="button" id="tab-btn-register" class="auth-tab-btn">Create Account</button>
+            </div>
+
+            <!-- Error message container -->
+            <div id="auth-error-message" class="auth-error-alert hidden"></div>
+
+            <!-- Login Form -->
+            <form id="form-login">
+                <div class="form-group">
+                    <label for="login-identifier">Username or Email</label>
+                    <input type="text" id="login-identifier" class="form-input" placeholder="e.g. alex or alex@example.com" required autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label for="login-password">Password</label>
+                    <div class="password-input-wrapper">
+                        <input type="password" id="login-password" class="form-input" placeholder="••••••••" required autocomplete="current-password">
+                        <button type="button" class="btn-toggle-password" title="Show password">👁️</button>
+                    </div>
+                </div>
+                <button type="submit" class="btn-primary-gradient btn-full-width">
+                    Sign In to TaskFlow
+                </button>
+            </form>
+
+            <!-- Register Form -->
+            <form id="form-register" class="hidden">
+                <div class="form-group">
+                    <label>Choose Avatar Profile</label>
+                    <div id="avatar-picker-grid" class="avatar-picker-grid">
+                        <!-- Populated by auth.js -->
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="register-name">Full Name</label>
+                    <input type="text" id="register-name" class="form-input" placeholder="e.g. Alex Rivera" autocomplete="name">
+                </div>
+                <div class="form-group">
+                    <label for="register-username">Username *</label>
+                    <input type="text" id="register-username" class="form-input" placeholder="e.g. alex" required autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label for="register-email">Email Address *</label>
+                    <input type="email" id="register-email" class="form-input" placeholder="alex@example.com" required autocomplete="email">
+                </div>
+                <div class="form-group">
+                    <label for="register-password">Password * (min 6 chars)</label>
+                    <div class="password-input-wrapper">
+                        <input type="password" id="register-password" class="form-input" placeholder="••••••••" required autocomplete="new-password">
+                        <button type="button" class="btn-toggle-password" title="Show password">👁️</button>
+                    </div>
+                </div>
+                <button type="submit" class="btn-primary-gradient btn-full-width">
+                    Create Account
+                </button>
+            </form>
+
+            <div class="auth-divider">
+                <span>OR FAST ACCESS</span>
+            </div>
+
+            <button type="button" id="btn-demo-login" class="btn-demo-quick">
+                ⚡ Try Instant Demo Account (Alex)
+            </button>
+        </div>
+    </div>
+
+    <!-- 2. Connect Mobile Phone & QR Code Modal -->
+    <div id="mobile-connect-modal" class="modal-backdrop hidden">
+        <div class="modal-card" style="text-align: center;">
+            <button type="button" id="btn-close-mobile-modal" class="modal-close-btn">✕</button>
+            <h3>Access on Your Mobile 📱</h3>
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 4px;">
+                Scan this code or open the link from your phone's browser
+            </p>
+
+            <div class="qr-container-card">
+                <canvas id="mobile-qr-canvas"></canvas>
+            </div>
+
+            <div class="mobile-connect-link-box">
+                <span id="mobile-connect-url" class="mobile-link-text">http://localhost:8080</span>
+                <button type="button" id="btn-copy-mobile-url" class="btn-copy-small">Copy</button>
+            </div>
+
+            <div class="instructions-steps">
+                <div class="step-item">
+                    <div class="step-number">1</div>
+                    <div>Ensure your phone and laptop are connected to the same Wi-Fi network.</div>
+                </div>
+                <div class="step-item">
+                    <div class="step-number">2</div>
+                    <div>Open your phone's Camera or Safari / Chrome and scan the QR code above.</div>
+                </div>
+                <div class="step-item">
+                    <div class="step-number">3</div>
+                    <div>Log in with your username/password. Your todos sync automatically!</div>
+                </div>
+                <div class="step-item">
+                    <div class="step-number">4</div>
+                    <div><b>Tip:</b> Tap <i>"Add to Home Screen"</i> on iPhone or Android to use it as a native app!</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. Task Edit & Subtasks Checklist Modal -->
+    <div id="task-edit-modal" class="modal-backdrop hidden">
+        <div class="modal-card">
+            <button type="button" id="btn-close-edit-modal" class="modal-close-btn">✕</button>
+            <h3>Edit Task</h3>
+            <form id="task-edit-form" style="margin-top: 18px;">
+                <div class="form-group">
+                    <label for="edit-task-title">Title</label>
+                    <input type="text" id="edit-task-title" class="form-input" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit-task-notes">Notes & Details</label>
+                    <textarea id="edit-task-notes" class="form-textarea" rows="3" placeholder="Add descriptions, links, or notes..."></textarea>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div class="form-group">
+                        <label for="edit-task-priority">Priority</label>
+                        <select id="edit-task-priority" class="form-select">
+                            <option value="urgent">🔥 Urgent</option>
+                            <option value="high">⚡ High</option>
+                            <option value="medium">🔷 Medium</option>
+                            <option value="low">☕ Low</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-task-category">Category</label>
+                        <select id="edit-task-category" class="form-select">
+                            <option value="personal">👤 Personal</option>
+                            <option value="work">💼 Work</option>
+                            <option value="shopping">🛒 Shopping</option>
+                            <option value="health">🏃 Health</option>
+                            <option value="learning">📚 Learning</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="edit-task-duedate">Due Date</label>
+                    <input type="date" id="edit-task-duedate" class="form-input">
+                </div>
+
+                <!-- Subtasks Checklist Section -->
+                <div class="subtasks-edit-section">
+                    <label>Subtasks / Checklist</label>
+                    <div id="edit-subtasks-list" class="subtasks-edit-list"></div>
+                    <div class="subtask-add-row">
+                        <input type="text" id="new-subtask-input" class="form-input" placeholder="Add a checklist item...">
+                        <button type="button" id="btn-add-subtask" class="btn-primary-gradient" style="padding: 8px 14px;">Add</button>
+                    </div>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 24px;">
+                    <button type="button" id="btn-delete-in-edit" style="color: var(--priority-urgent); font-weight: 600; font-size: 0.88rem;">
+                        🗑️ Delete Task
+                    </button>
+                    <div style="display: flex; gap: 10px;">
+                        <button type="button" id="btn-cancel-edit" class="btn-demo-quick" style="width: auto; padding: 8px 16px;">
+                            Cancel
+                        </button>
+                        <button type="submit" class="btn-primary-gradient" style="padding: 8px 20px;">
+                            Save Changes
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 4. Settings & Data Backup Modal -->
+    <div id="settings-modal" class="modal-backdrop hidden">
+        <div class="modal-card">
+            <button type="button" id="btn-close-settings" class="modal-close-btn">✕</button>
+            <h3>Settings & Backups</h3>
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 4px; margin-bottom: 20px;">
+                Manage your data and synchronization
+            </p>
+
+            <div class="form-group">
+                <label>Data Backup & Migration</label>
+                <div style="display: flex; gap: 10px; margin-top: 6px;">
+                    <button type="button" id="btn-export-json" class="btn-demo-quick" style="flex: 1;">
+                        📥 Export (JSON)
+                    </button>
+                    <label class="btn-demo-quick" style="flex: 1; text-align: center; cursor: pointer;">
+                        📤 Import (JSON)
+                        <input type="file" id="import-json-file" accept=".json" style="display: none;">
+                    </label>
+                </div>
+            </div>
+
+            <!-- Supabase Cloud Database Section -->
+            <div class="form-group" style="margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <label style="margin: 0; font-weight: 600;">⚡ Supabase Cloud Database</label>
+                    <span id="supabase-status-pill" style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: rgba(16, 185, 129, 0.15); color: var(--color-success); font-weight: 600;">Local Mode</span>
+                </div>
+                <p style="color: var(--text-muted); font-size: 0.8rem; margin-bottom: 12px; line-height: 1.4;">
+                    Sync tasks across all devices anywhere in the world without running your laptop server.
+                </p>
+
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <div>
+                        <span style="font-size: 0.75rem; color: var(--text-secondary);">Project URL:</span>
+                        <input type="text" id="supabase-url-input" class="auth-input" placeholder="https://your-project.supabase.co" style="padding: 8px 12px; font-size: 0.82rem; margin-top: 4px;">
+                    </div>
+                    <div>
+                        <span style="font-size: 0.75rem; color: var(--text-secondary);">Anon Public API Key:</span>
+                        <input type="password" id="supabase-key-input" class="auth-input" placeholder="eyJhbGciOiJIUzI1NiIsIn..." style="padding: 8px 12px; font-size: 0.82rem; margin-top: 4px;">
+                    </div>
+                    <div style="display: flex; gap: 8px; margin-top: 4px;">
+                        <button type="button" id="btn-save-supabase" class="btn-primary-gradient" style="flex: 1; padding: 8px 14px; font-size: 0.82rem;">
+                            Save & Connect
+                        </button>
+                        <button type="button" id="btn-disconnect-supabase" class="btn-demo-quick" style="padding: 8px 14px; font-size: 0.82rem;">
+                            Disconnect
+                        </button>
+                    </div>
+                </div>
+
+                <details style="margin-top: 12px; background: var(--bg-surface-elevated); padding: 8px 12px; border-radius: var(--radius-sm); font-size: 0.78rem;">
+                    <summary style="cursor: pointer; color: var(--brand-primary); font-weight: 500;">📋 Click for 1-Click SQL Setup Script</summary>
+                    <pre style="margin-top: 8px; padding: 8px; background: rgba(0,0,0,0.2); border-radius: 4px; overflow-x: auto; font-family: monospace; font-size: 0.72rem; color: var(--text-primary); user-select: all;">create table if not exists todos (
+  id text primary key,
+  user_id text not null,
+  title text not null,
+  notes text default '',
+  priority text default 'medium',
+  category text default 'personal',
+  due_date text,
+  completed boolean default false,
+  starred boolean default false,
+  subtasks jsonb default '[]'::jsonb,
+  created_at timestamp with time zone default timezone('utc'::text, now())
+);
+alter publication supabase_realtime add table todos;
+alter table todos enable row level security;
+create policy "Allow all operations" on todos for all using (true) with check (true);</pre>
+                </details>
+            </div>
+
+            <div class="form-group" style="margin-top: 20px;">
+                <label>How Cross-Device Sync Works</label>
+                <div style="background: var(--bg-surface-elevated); padding: 12px; border-radius: var(--radius-sm); font-size: 0.82rem; color: var(--text-secondary); line-height: 1.6;">
+                    • <b>Supabase Cloud:</b> Instant real-time sync everywhere on earth, phone or laptop.<br>
+                    • <b>Local Wi-Fi Server:</b> Run <code>start-server.bat</code> on your laptop for local network sync.<br>
+                    • <b>Offline Mode:</b> Saves locally so tasks are always accessible without internet.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- PWA Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('sw.js').catch(function() {});
+            });
+        }
+    </script>
+
+    <!-- Supabase Cloud SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/config.js"></script>
+    <script src="js/supabase.js"></script>
+
+    <!-- App Scripts -->
+    <script src="js/qrcode.js"></script>
+    <script src="js/audio.js"></script>
+    <script src="js/confetti.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
