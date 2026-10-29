@@ -808,6 +808,11 @@
             currentFilter = filter;
             currentCategory = 'all';
 
+            // Keep the quick-add type in sync with the view the user is in
+            var typeByView = { weekly: 'weekly', monthly: 'monthly', today: 'daily', upcoming: 'daily' };
+            var typeSelect = document.getElementById('quick-type-select');
+            if (typeSelect && typeByView[filter]) typeSelect.value = typeByView[filter];
+
             document.querySelectorAll('[data-filter]').forEach(function(el) {
                 if (el.getAttribute('data-filter') === filter) {
                     el.classList.add('active');
