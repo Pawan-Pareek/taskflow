@@ -17,17 +17,23 @@
         },
 
         isEnabled: function() {
-            return !!(this.getUrl() && this.getKey() && window.supabase);
+            var sb = window.supabase || (window.supabaseJs && window.supabaseJs.createClient ? window.supabaseJs : null);
+            return !!(this.getUrl() && this.getKey() && sb);
         },
 
         getClient: function() {
             if (client) return client;
             var url = this.getUrl();
             var key = this.getKey();
-            if (url && key && window.supabase) {
+            // Support both old (window.supabase) and new (window.supabase or window.supabaseJs) CDN exports
+            var sbLib = (window.supabase && typeof window.supabase.createClient === 'function')
+                ? window.supabase
+                : null;
+            if (!sbLib && window.supabase && window.supabase.default) sbLib = window.supabase.default;
+            if (url && key && sbLib) {
                 try {
-                    client = window.supabase.createClient(url, key, {
-                        auth: { persistSession: true }
+                    client = sbLib.createClient(url, key, {
+                        auth: { persistSession: true, autoRefreshToken: false }
                     });
                     return client;
                 } catch(e) {
