@@ -90,6 +90,25 @@
                 </li>
             </ul>
 
+            <!-- Goals -->
+            <div class="nav-group-title">Goals</div>
+            <ul class="nav-list">
+                <li>
+                    <button type="button" class="nav-item-btn" data-filter="weekly" id="nav-filter-weekly">
+                        <span class="nav-icon">🗓️</span>
+                        <span class="nav-label">Weekly Goals</span>
+                        <span class="nav-badge-count" id="count-weekly">0</span>
+                    </button>
+                </li>
+                <li>
+                    <button type="button" class="nav-item-btn" data-filter="monthly" id="nav-filter-monthly">
+                        <span class="nav-icon">🎯</span>
+                        <span class="nav-label">Monthly Goals</span>
+                        <span class="nav-badge-count" id="count-monthly">0</span>
+                    </button>
+                </li>
+            </ul>
+
             <!-- Categories -->
             <div class="nav-group-title">Categories</div>
             <ul class="nav-list">
@@ -192,6 +211,11 @@
                     <h2 id="current-view-title">Today’s Focus</h2>
                     <div id="current-view-date" class="view-subheading">Loading date...</div>
                 </div>
+                <div class="date-filter-container">
+                    <span>Date:</span>
+                    <input type="date" id="date-filter-input" class="quick-date-picker" title="Show tasks and goals for this date">
+                    <button type="button" id="btn-clear-date-filter" class="btn-clear-date" title="Clear date filter">✕</button>
+                </div>
                 <div class="sort-container">
                     <span>Sort by:</span>
                     <select id="sort-selector" class="sort-select">
@@ -203,6 +227,14 @@
                 </div>
             </section>
 
+            <!-- Week / Month navigator (Goal views only) -->
+            <div id="period-nav" class="period-nav hidden">
+                <button type="button" id="btn-period-prev" class="btn-period" title="Previous">‹</button>
+                <span id="period-nav-label" class="period-nav-label"></span>
+                <button type="button" id="btn-period-next" class="btn-period" title="Next">›</button>
+                <button type="button" id="btn-period-current" class="btn-period-current hidden">This week</button>
+            </div>
+
             <!-- Quick Add Task Card -->
             <section class="quick-add-card">
                 <form id="quick-add-form">
@@ -212,7 +244,12 @@
                     </div>
                     <div class="quick-add-controls">
                         <div class="quick-options-left">
-                            <select id="quick-priority-select" class="quick-pill-select" title="Priority">
+                            <select id="quick-type-select" class="quick-pill-select" title="Task type">
+                                <option value="daily" selected>📌 Daily</option>
+                                <option value="weekly">🗓️ Weekly Goal</option>
+                                <option value="monthly">🎯 Monthly Goal</option>
+                            </select>
+                            <select id="quick-priority-select"class="quick-pill-select" title="Priority">
                                 <option value="urgent">🔥 Urgent</option>
                                 <option value="high">⚡ High</option>
                                 <option value="medium" selected>🔷 Medium</option>
@@ -426,7 +463,15 @@
                     </div>
                 </div>
                 <div class="form-group">
-                    <label for="edit-task-duedate">Due Date</label>
+                    <label for="edit-task-type">Type</label>
+                    <select id="edit-task-type" class="form-select">
+                        <option value="daily">📌 Daily task</option>
+                        <option value="weekly">🗓️ Weekly goal</option>
+                        <option value="monthly">🎯 Monthly goal</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="edit-task-duedate">Due Date (any day in the week/month for goals)</label>
                     <input type="date" id="edit-task-duedate" class="form-input">
                 </div>
 
@@ -534,9 +579,11 @@ create table if not exists todos (
   due_date text,
   completed boolean default false,
   starred boolean default false,
+  goal_type text default 'daily',
   subtasks jsonb default '[]'::jsonb,
   created_at timestamp with time zone default timezone('utc'::text, now())
 );
+-- Table already exists? Run: alter table todos add column if not exists goal_type text default 'daily';
 alter publication supabase_realtime add table todos;
 alter table todos enable row level security;
 create policy "Allow all operations on todos" on todos for all using (true) with check (true);</pre>

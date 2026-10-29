@@ -1413,3 +1413,18 @@ button {
 .hidden {
     display: none !important;
 }
+
+/* ===== Weekly / Monthly goals & date filter ===== */
+.view-header { flex-wrap: wrap; gap: 12px; }
+.date-filter-container { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--text-muted); margin-left: auto; margin-right: 12px; }
+.btn-clear-date { color: var(--text-muted); font-size: 0.85rem; padding: 4px 8px; border-radius: 8px; }
+.btn-clear-date:hover { color: var(--text-primary); background: var(--bg-surface-elevated); }
+.badge-date.badge-goal { background: rgba(139, 92, 246, 0.15); color: #a78bfa; }
+.badge-date.badge-goal.overdue { background: rgba(239, 68, 68, 0.15); color: var(--priority-urgent); }
+.period-nav { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; }
+.period-nav.hidden, .btn-period-current.hidden { display: none; }
+.period-nav-label { font-weight: 600; font-size: 0.95rem; min-width: 190px; text-align: center; }
+.btn-period { width: 32px; height: 32px; border-radius: 50%; background: var(--bg-surface-elevated); color: var(--text-primary); font-size: 1.1rem; }
+.btn-period:hover { background: rgba(139, 92, 246, 0.2); }
+.btn-period-current { font-size: 0.8rem; padding: 5px 12px; border-radius: 14px; background: rgba(139, 92, 246, 0.18); color: #a78bfa; font-weight: 600; }
+.badge-date.badge-rollover { background: rgba(245, 158, 11, 0.16); color: #fbbf24; }

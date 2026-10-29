@@ -231,6 +231,7 @@
                     notes: row.notes || '',
                     priority: row.priority || 'medium',
                     category: row.category || 'personal',
+                    type: row.goal_type || undefined,
                     dueDate: row.due_date || '',
                     completed: !!row.completed,
                     starred: !!row.starred,
@@ -255,6 +256,7 @@
                     notes: t.notes || '',
                     priority: t.priority || 'medium',
                     category: t.category || 'personal',
+                    goal_type: t.type || 'daily',
                     due_date: t.dueDate || null,
                     completed: !!t.completed,
                     starred: !!t.starred,
@@ -263,6 +265,15 @@
             });
 
             var res = await c.from('todos').upsert(rows, { onConflict: 'id' });
+            if (res.error && /goal_type/.test(res.error.message || '')) {
+                // goal_type column not created yet: save without it so sync keeps working
+                console.warn('Supabase: add the goal_type column to persist weekly/monthly goals.');
+                if (!window._goalTypeWarned && window.showToast) {
+                    window._goalTypeWarned = true;
+                    window.showToast('Goals are saved on this device only. Add the goal_type column in Supabase to sync them (see Settings).', 'info');
+                }
+                res = await c.from('todos').upsert(rows.map(function(r) { delete r.goal_type; return r; }), { onConflict: 'id' });
+            }
             if (res.error) {
                 console.warn('Supabase batch upsert warning:', res.error);
             }

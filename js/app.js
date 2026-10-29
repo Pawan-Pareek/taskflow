@@ -6,6 +6,85 @@
     var searchQuery = '';
     var currentSort = 'priority'; // 'priority', 'dueDate', 'createdAt', 'alphabetical'
     var editingTaskId = null;
+    var selectedDate = ''; // 'YYYY-MM-DD' date filter ('' = off)
+
+    var MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+    // Local-time date helpers (avoid UTC shifts from toISOString)
+    function pad2(n) { return (n < 10 ? '0' : '') + n; }
+    function fmtDate(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
+    function parseDate(str) {
+        var p = String(str).split('-');
+        return new Date(+p[0], +p[1] - 1, +p[2]);
+    }
+    // Goals store dueDate as the END of their period (Sunday / last day of month),
+    // so overdue + sort logic keeps working; the start is derived from it.
+    function periodEnd(type, dateStr) {
+        var d = parseDate(dateStr);
+        if (type === 'weekly') {
+            d.setDate(d.getDate() + 6 - ((d.getDay() + 6) % 7)); // Monday-based week
+            return fmtDate(d);
+        }
+        if (type === 'monthly') return fmtDate(new Date(d.getFullYear(), d.getMonth() + 1, 0));
+        return dateStr;
+    }
+    function periodStart(type, dueDate) {
+        var d = parseDate(dueDate);
+        if (type === 'weekly') { d.setDate(d.getDate() - 6); return fmtDate(d); }
+        if (type === 'monthly') return fmtDate(new Date(d.getFullYear(), d.getMonth(), 1));
+        return dueDate;
+    }
+    function isGoal(t) { return t.type === 'weekly' || t.type === 'monthly'; }
+
+    var FULL_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+    function periodLabel(type, dateStr) {
+        var end = parseDate(periodEnd(type, dateStr));
+        if (type === 'monthly') return FULL_MONTHS[end.getMonth()] + ' ' + end.getFullYear();
+        var start = parseDate(periodStart(type, fmtDate(end)));
+        return MONTH_NAMES[start.getMonth()] + ' ' + start.getDate() + ' – ' + MONTH_NAMES[end.getMonth()] + ' ' + end.getDate() + ', ' + end.getFullYear();
+    }
+
+    // A goal belongs to the period it was created for. Unfinished goals from past periods
+    // also "roll over" into the CURRENT period so they stay visible.
+    function goalRolledOver(t, todayStr) {
+        if (!isGoal(t) || t.completed || !t.dueDate) return false;
+        return t.dueDate < periodStart(t.type, periodEnd(t.type, todayStr));
+    }
+    function goalInPeriod(t, viewDate, todayStr) {
+        var end = t.dueDate;
+        if (!end) return false;
+        if (viewDate >= periodStart(t.type, end) && viewDate <= end) return true;
+        if (goalRolledOver(t, todayStr)) {
+            return viewDate >= periodStart(t.type, periodEnd(t.type, todayStr)) && viewDate <= periodEnd(t.type, todayStr);
+        }
+        return false;
+    }
+
+    // Remember goal types on this device. If the cloud table has no goal_type column,
+    // the type would otherwise be lost on every reload / realtime refresh.
+    var TYPE_KEY = 'taskflow_goal_types';
+    var typesRestored = false;
+    function saveTypeMap(list) {
+        try {
+            var map = {};
+            list.forEach(function(t) { if (isGoal(t)) map[t.id] = t.type; });
+            localStorage.setItem(TYPE_KEY, JSON.stringify(map));
+        } catch (e) {}
+    }
+    function applyKnownTypes(list) {
+        var map = {};
+        try { map = JSON.parse(localStorage.getItem(TYPE_KEY) || '{}'); } catch (e) {}
+        // The cloud column defaults to 'daily', so treat 'daily' like "unknown" when we
+        // remember this task as a goal; the restored type is then written back to the cloud.
+        list.forEach(function(t) {
+            if ((!t.type || t.type === 'daily') && map[t.id]) {
+                t.type = map[t.id];
+                typesRestored = true;
+            }
+        });
+        return list;
+    }
 
     var CATEGORIES = {
         personal: { name: 'Personal', icon: '👤', color: '#8b5cf6' },
@@ -58,6 +137,18 @@
                 this.render();
             });
 
+            // Roll over to the new day / week / month without a page reload
+            var lastDay = this.getTodayStr();
+            var checkNewDay = function() {
+                var now = App.getTodayStr();
+                if (now !== lastDay) {
+                    lastDay = now;
+                    App.render();
+                }
+            };
+            setInterval(checkNewDay, 60000);
+            document.addEventListener('visibilitychange', function() { if (!document.hidden) checkNewDay(); });
+
             // Render initial date and counts immediately
             this.updateViewTitle();
             this.render();
@@ -90,13 +181,19 @@
             try {
                 var fetched = await TaskAPI.getTodos();
                 if (Array.isArray(fetched)) {
-                    tasks = fetched;
+                    tasks = applyKnownTypes(fetched);
                 } else if (fetched && typeof fetched === 'object' && !fetched.error) {
-                    tasks = [fetched];
+                    tasks = applyKnownTypes([fetched]);
                 } else {
                     tasks = [];
                 }
                 this.render();
+
+                // Heal the cloud copy if goal types had to be restored from this device
+                if (typesRestored) {
+                    typesRestored = false;
+                    TaskAPI.saveTodos(tasks).catch(function() {});
+                }
 
                 // Setup Supabase Realtime multi-device sync
                 if (!this._realtimeSubscribed && window.TaskSupabase && window.TaskSupabase.isEnabled()) {
@@ -106,7 +203,7 @@
                         window.TaskSupabase.subscribeToChanges(u.id, async function() {
                             var updated = await window.TaskSupabase.getTodos(u.id);
                             if (Array.isArray(updated)) {
-                                tasks = updated;
+                                tasks = applyKnownTypes(updated);
                                 App.render();
                             }
                         });
@@ -120,6 +217,7 @@
         },
 
         persistTasks: function() {
+            saveTypeMap(tasks);
             // Instant optimistic update: render to screen immediately!
             this.render();
             // Background save & sync
@@ -182,9 +280,11 @@
 
                 var priority = (document.getElementById('quick-priority-select') || {}).value || 'medium';
                 var category = (document.getElementById('quick-category-select') || {}).value || 'personal';
+                var type = (document.getElementById('quick-type-select') || {}).value || 'daily';
                 var dueDate = (document.getElementById('quick-due-date') || {}).value || self.getTodayStr();
 
                 self.addTask({
+                    type: type,
                     title: text,
                     notes: '',
                     priority: priority,
@@ -201,7 +301,11 @@
                 showToast('Task added! 🎯', 'success');
 
                 // Auto-switch view so the new task is visible
-                if (currentFilter === 'completed') {
+                if (type !== 'daily' && currentFilter !== 'all' && currentFilter !== type) {
+                    self.setFilter(type);
+                } else if (type === 'daily' && (currentFilter === 'weekly' || currentFilter === 'monthly')) {
+                    self.setFilter('today');
+                } else if (currentFilter === 'completed') {
                     self.setFilter('today');
                 } else if (currentCategory !== 'all' && currentCategory !== category) {
                     self.setFilter('all');
@@ -224,6 +328,47 @@
                         e.preventDefault();
                         doAddTask();
                     }
+                });
+            }
+
+            // Date filter: show tasks/goals that cover the selected date
+            var dateFilterInput = document.getElementById('date-filter-input');
+            var dateFilterClear = document.getElementById('btn-clear-date-filter');
+            if (dateFilterInput) {
+                dateFilterInput.addEventListener('change', function(e) {
+                    selectedDate = e.target.value || '';
+                    self.render();
+                    SoundFX.play('pop');
+                });
+            }
+            if (dateFilterClear) {
+                dateFilterClear.addEventListener('click', function() {
+                    selectedDate = '';
+                    if (dateFilterInput) dateFilterInput.value = '';
+                    self.render();
+                });
+            }
+
+            // Week / month navigation for the goal views
+            function shiftPeriod(dir) {
+                var d = parseDate(selectedDate || self.getTodayStr());
+                if (currentFilter === 'monthly') d = new Date(d.getFullYear(), d.getMonth() + dir, 1);
+                else d.setDate(d.getDate() + 7 * dir);
+                selectedDate = fmtDate(d);
+                if (dateFilterInput) dateFilterInput.value = selectedDate;
+                self.render();
+                SoundFX.play('pop');
+            }
+            var prevPeriodBtn = document.getElementById('btn-period-prev');
+            var nextPeriodBtn = document.getElementById('btn-period-next');
+            var thisPeriodBtn = document.getElementById('btn-period-current');
+            if (prevPeriodBtn) prevPeriodBtn.addEventListener('click', function() { shiftPeriod(-1); });
+            if (nextPeriodBtn) nextPeriodBtn.addEventListener('click', function() { shiftPeriod(1); });
+            if (thisPeriodBtn) {
+                thisPeriodBtn.addEventListener('click', function() {
+                    selectedDate = '';
+                    if (dateFilterInput) dateFilterInput.value = '';
+                    self.render();
                 });
             }
 
@@ -284,7 +429,8 @@
                     task.notes = document.getElementById('edit-task-notes').value.trim();
                     task.priority = document.getElementById('edit-task-priority').value;
                     task.category = document.getElementById('edit-task-category').value;
-                    task.dueDate = document.getElementById('edit-task-duedate').value;
+                    task.type = document.getElementById('edit-task-type').value;
+                    task.dueDate = periodEnd(task.type, document.getElementById('edit-task-duedate').value || self.getTodayStr());
 
                     self.persistTasks();
                     self.closeEditModal();
@@ -706,31 +852,53 @@
                     today: 'Today’s Focus',
                     all: 'All Tasks',
                     upcoming: 'Upcoming Tasks',
+                    weekly: '🗓️ Weekly Goals',
+                    monthly: '🎯 Monthly Goals',
                     starred: 'Starred / Important',
                     completed: 'Completed Tasks'
                 };
                 if (titleEl) titleEl.textContent = titles[currentFilter] || 'Tasks';
             }
 
+            var periodNav = document.getElementById('period-nav');
+            var inGoalView = currentCategory === 'all' && (currentFilter === 'weekly' || currentFilter === 'monthly');
+            if (periodNav) periodNav.classList.toggle('hidden', !inGoalView);
+            if (inGoalView) {
+                var viewDate = selectedDate || this.getTodayStr();
+                var isCurrent = periodEnd(currentFilter, viewDate) === periodEnd(currentFilter, this.getTodayStr());
+                var labelEl = document.getElementById('period-nav-label');
+                if (labelEl) labelEl.textContent = periodLabel(currentFilter, viewDate) + (isCurrent ? ' (current)' : '');
+                var curBtn = document.getElementById('btn-period-current');
+                if (curBtn) {
+                    curBtn.textContent = currentFilter === 'monthly' ? 'This month' : 'This week';
+                    curBtn.classList.toggle('hidden', isCurrent);
+                }
+            }
+
             if (subtitleEl) {
-                var today = new Date();
                 var options = { weekday: 'long', month: 'short', day: 'numeric' };
-                subtitleEl.textContent = today.toLocaleDateString(undefined, options);
+                if (selectedDate) {
+                    subtitleEl.textContent = 'Showing items for ' + parseDate(selectedDate).toLocaleDateString(undefined, options);
+                } else {
+                    subtitleEl.textContent = new Date().toLocaleDateString(undefined, options);
+                }
             }
         },
 
         getTodayStr: function() {
-            return new Date().toISOString().split('T')[0];
+            return fmtDate(new Date());
         },
 
         addTask: function(data) {
+            var type = data.type || 'daily';
             var newTask = {
                 id: 'task_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+                type: type,
                 title: data.title,
                 notes: data.notes || '',
                 priority: data.priority || 'medium',
                 category: data.category || 'personal',
-                dueDate: data.dueDate || this.getTodayStr(),
+                dueDate: periodEnd(type, data.dueDate || this.getTodayStr()),
                 completed: false,
                 starred: !!data.starred,
                 subtasks: data.subtasks || [],
@@ -751,7 +919,7 @@
                 SoundFX.play('check');
 
                 // Check if all today's tasks are finished
-                var todayTasks = tasks.filter(t => t.dueDate === this.getTodayStr());
+                var todayTasks = tasks.filter(t => !isGoal(t) && t.dueDate === this.getTodayStr());
                 var allDone = todayTasks.length > 0 && todayTasks.every(t => t.completed);
 
                 if (allDone) {
@@ -795,6 +963,7 @@
             document.getElementById('edit-task-notes').value = task.notes || '';
             document.getElementById('edit-task-priority').value = task.priority || 'medium';
             document.getElementById('edit-task-category').value = task.category || 'personal';
+            document.getElementById('edit-task-type').value = task.type || 'daily';
             document.getElementById('edit-task-duedate').value = task.dueDate || this.getTodayStr();
 
             this.renderEditSubtasks(task);
@@ -866,12 +1035,24 @@
                     if (!matchTitle && !matchNotes) return false;
                 }
 
+                // Date filter: item's day / week / month must cover the selected date
+                var goalView = currentCategory === 'all' && (currentFilter === 'weekly' || currentFilter === 'monthly');
+                if (selectedDate && !goalView) {
+                    var due = t.dueDate || '';
+                    if (!due || selectedDate < periodStart(t.type, due) || selectedDate > due) return false;
+                }
+
                 // View Filter
                 if (currentCategory === 'all') {
+                    if (currentFilter === 'weekly' || currentFilter === 'monthly') {
+                        return t.type === currentFilter && goalInPeriod(t, selectedDate || todayStr, todayStr);
+                    }
                     if (currentFilter === 'today') {
-                        return t.dueDate === todayStr || (!t.completed && t.dueDate < todayStr);
+                        if (selectedDate) return true;
+                        return !isGoal(t) && (t.dueDate === todayStr || (!t.completed && t.dueDate < todayStr));
                     } else if (currentFilter === 'upcoming') {
-                        return t.dueDate > todayStr;
+                        if (selectedDate) return true;
+                        return !isGoal(t) && t.dueDate > todayStr;
                     } else if (currentFilter === 'starred') {
                         return t.starred;
                     } else if (currentFilter === 'completed') {
@@ -917,8 +1098,10 @@
             var todayStr = this.getTodayStr();
             var counts = {
                 all: tasks.filter(t => !t.completed).length,
-                today: tasks.filter(t => !t.completed && (t.dueDate === todayStr || t.dueDate < todayStr)).length,
-                upcoming: tasks.filter(t => !t.completed && t.dueDate > todayStr).length,
+                today: tasks.filter(t => !isGoal(t) && !t.completed && t.dueDate <= todayStr).length,
+                upcoming: tasks.filter(t => !isGoal(t) && !t.completed && t.dueDate > todayStr).length,
+                weekly: tasks.filter(t => t.type === 'weekly' && !t.completed && goalInPeriod(t, todayStr, todayStr)).length,
+                monthly: tasks.filter(t => t.type === 'monthly' && !t.completed && goalInPeriod(t, todayStr, todayStr)).length,
                 starred: tasks.filter(t => t.starred && !t.completed).length,
                 completed: tasks.filter(t => t.completed).length
             };
@@ -931,7 +1114,7 @@
 
         updateProgressCard: function() {
             var todayStr = this.getTodayStr();
-            var todayTasks = tasks.filter(t => t.dueDate === todayStr);
+            var todayTasks = tasks.filter(t => !isGoal(t) && t.dueDate === todayStr);
             var completedCount = todayTasks.filter(t => t.completed).length;
             var totalCount = todayTasks.length;
 
@@ -978,7 +1161,10 @@
                     ? `<span class="badge-subtasks">✓ ${completedSubtasks}/${subtasks.length}</span>` 
                     : '';
 
-                var dateBadge = App.formatDateBadge(task.dueDate, task.completed);
+                var dateBadge = App.formatDateBadge(task.dueDate, task.completed, task.type);
+                if (goalRolledOver(task, App.getTodayStr()) && currentFilter === task.type) {
+                    dateBadge = '<span class="badge-date badge-rollover" title="Unfinished from an earlier ' + (task.type === 'monthly' ? 'month' : 'week') + '">↻ Rolled over</span>' + dateBadge;
+                }
 
                 item.innerHTML = `
                     <button type="button" class="task-checkbox" aria-label="Toggle completed">
@@ -1045,12 +1231,22 @@
             });
         },
 
-        formatDateBadge: function(dueDate, isCompleted) {
+        formatDateBadge: function(dueDate, isCompleted, type) {
             if (!dueDate) return '';
             var today = this.getTodayStr();
             var tomorrow = new Date();
             tomorrow.setDate(tomorrow.getDate() + 1);
-            var tomorrowStr = tomorrow.toISOString().split('T')[0];
+            var tomorrowStr = fmtDate(tomorrow);
+
+            if (type === 'weekly' || type === 'monthly') {
+                var s = parseDate(periodStart(type, dueDate));
+                var e = parseDate(dueDate);
+                var label = type === 'monthly'
+                    ? MONTH_NAMES[e.getMonth()] + ' ' + e.getFullYear()
+                    : MONTH_NAMES[s.getMonth()] + ' ' + s.getDate() + ' – ' + MONTH_NAMES[e.getMonth()] + ' ' + e.getDate();
+                var cls = (dueDate < today && !isCompleted && !goalRolledOver({ type: type, dueDate: dueDate, completed: false }, today)) ? ' overdue' : '';
+                return '<span class="badge-date badge-goal' + cls + '">' + (type === 'monthly' ? '🎯 Month: ' : '🗓️ Week: ') + label + '</span>';
+            }
 
             if (dueDate === today) {
                 return '<span class="badge-date today">📅 Today</span>';
