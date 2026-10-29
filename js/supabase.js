@@ -128,8 +128,9 @@
             var eLower = userData.email.trim().toLowerCase();
 
             // Check if username or email is already taken
-            var check = await c.from('users').select('id, username, email').or('username.ilike.' + uLower + ',email.ilike.' + eLower);
-            if (check.data && check.data.length > 0) {
+            var checkUser = await c.from('users').select('id').ilike('username', uLower);
+            var checkEmail = await c.from('users').select('id').ilike('email', eLower);
+            if ((checkUser.data && checkUser.data.length > 0) || (checkEmail.data && checkEmail.data.length > 0)) {
                 throw new Error('Username or email is already registered.');
             }
 
@@ -168,20 +169,24 @@
             var idTrim = identifier.trim().toLowerCase();
             var hash = this.hashPassword(password);
 
-            var res = await c.from('users')
-                .select('*')
-                .or('username.ilike.' + idTrim + ',email.ilike.' + idTrim);
-
-            if (res.error) {
-                if (res.error.code === '42P01') {
-                    throw new Error('Cloud "users" table is missing in Supabase.\nPlease run the SQL setup script from Settings.');
-                }
-                throw new Error(res.error.message || 'Login failed.');
+            // Try login by username first, then by email
+            var byUsername = await c.from('users').select('*').ilike('username', idTrim);
+            if (byUsername.error && byUsername.error.code === '42P01') {
+                throw new Error('Cloud "users" table is missing in Supabase.\nPlease run the SQL setup script from Settings.');
             }
 
-            var list = res.data || [];
+            var byEmail = await c.from('users').select('*').ilike('email', idTrim);
+
+            var list = [];
+            if (byUsername.data && byUsername.data.length > 0) list = list.concat(byUsername.data);
+            if (byEmail.data && byEmail.data.length > 0) list = list.concat(byEmail.data);
+
+            if (list.length === 0) {
+                throw new Error('Invalid username/email or password.');
+            }
+
             var matched = list.find(function(u) {
-                return u.password_hash === hash || u.password_hash === password || u.password_hash === ('h_' + password);
+                return u.password_hash === hash || u.password_hash === password;
             });
 
             if (!matched) {
