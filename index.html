@@ -510,7 +510,21 @@
 
                 <details style="margin-top: 12px; background: var(--bg-surface-elevated); padding: 8px 12px; border-radius: var(--radius-sm); font-size: 0.78rem;">
                     <summary style="cursor: pointer; color: var(--brand-primary); font-weight: 500;">📋 Click for 1-Click SQL Setup Script</summary>
-                    <pre style="margin-top: 8px; padding: 8px; background: rgba(0,0,0,0.2); border-radius: 4px; overflow-x: auto; font-family: monospace; font-size: 0.72rem; color: var(--text-primary); user-select: all;">create table if not exists todos (
+                    <pre style="margin-top: 8px; padding: 8px; background: rgba(0,0,0,0.2); border-radius: 4px; overflow-x: auto; font-family: monospace; font-size: 0.72rem; color: var(--text-primary); user-select: all;">-- 1. Create Users Table (Global Multi-User Auth)
+create table if not exists users (
+  id text primary key,
+  username text unique not null,
+  name text not null,
+  email text unique not null,
+  password_hash text not null,
+  avatar text default 'avatar-1',
+  created_at timestamp with time zone default timezone('utc'::text, now())
+);
+alter table users enable row level security;
+create policy "Allow all operations on users" on users for all using (true) with check (true);
+
+-- 2. Create Todos Table (Cross-Device Cloud Sync)
+create table if not exists todos (
   id text primary key,
   user_id text not null,
   title text not null,
@@ -525,7 +539,7 @@
 );
 alter publication supabase_realtime add table todos;
 alter table todos enable row level security;
-create policy "Allow all operations" on todos for all using (true) with check (true);</pre>
+create policy "Allow all operations on todos" on todos for all using (true) with check (true);</pre>
                 </details>
             </div>
 

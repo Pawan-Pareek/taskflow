@@ -197,6 +197,22 @@
 
         // REGISTER
         register: async function(userData) {
+            // 1. Cloud Database Registration (Works globally across all browsers & mobile devices)
+            if (window.TaskSupabase && window.TaskSupabase.isEnabled()) {
+                try {
+                    var cloudUser = await window.TaskSupabase.registerUser(userData);
+                    var token = 'tok_cloud_' + cloudUser.id + '_' + Date.now();
+                    this.setToken(token);
+                    this.setCurrentUser(cloudUser);
+                    return { user: cloudUser, token: token };
+                } catch(err) {
+                    if (err.message && (err.message.includes('already registered') || err.message.includes('table is missing'))) {
+                        throw err;
+                    }
+                    console.warn('Supabase register error:', err);
+                }
+            }
+
             if (await this.checkServer()) {
                 try {
                     var res = await fetch(BASE_URL + '/api/auth/register', {
@@ -272,6 +288,22 @@
 
         // LOGIN
         login: async function(credentials) {
+            // 1. Cloud Database Login (Works globally across all browsers & mobile devices)
+            if (window.TaskSupabase && window.TaskSupabase.isEnabled()) {
+                try {
+                    var cloudUser = await window.TaskSupabase.loginUser(credentials.identifier, credentials.password);
+                    var token = 'tok_cloud_' + cloudUser.id + '_' + Date.now();
+                    this.setToken(token);
+                    this.setCurrentUser(cloudUser);
+                    return { user: cloudUser, token: token };
+                } catch(err) {
+                    if (err.message && (err.message.includes('Invalid username') || err.message.includes('table is missing'))) {
+                        throw err;
+                    }
+                    console.warn('Supabase login error:', err);
+                }
+            }
+
             if (await this.checkServer()) {
                 try {
                     var res = await fetch(BASE_URL + '/api/auth/login', {

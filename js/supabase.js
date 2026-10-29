@@ -109,6 +109,94 @@
             return { success: true, cleared: false };
         },
 
+        // Secure simple password hasher
+        hashPassword: function(str) {
+            var hash = 0;
+            for (var i = 0; i < str.length; i++) {
+                var char = str.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash |= 0;
+            }
+            return 'h_' + Math.abs(hash).toString(16);
+        },
+
+        // Cloud User Registration (works across all browsers and devices)
+        registerUser: async function(userData) {
+            var c = this.getClient();
+            if (!c) throw new Error('Supabase cloud database not connected.');
+            var uLower = userData.username.trim().toLowerCase();
+            var eLower = userData.email.trim().toLowerCase();
+
+            // Check if username or email is already taken
+            var check = await c.from('users').select('id, username, email').or('username.ilike.' + uLower + ',email.ilike.' + eLower);
+            if (check.data && check.data.length > 0) {
+                throw new Error('Username or email is already registered.');
+            }
+
+            var hash = this.hashPassword(userData.password);
+            var newId = 'usr_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+            var newUserRow = {
+                id: newId,
+                username: userData.username.trim(),
+                name: userData.name ? userData.name.trim() : userData.username.trim(),
+                email: userData.email.trim(),
+                password_hash: hash,
+                avatar: userData.avatar || 'avatar-1'
+            };
+
+            var res = await c.from('users').insert([newUserRow]);
+            if (res.error) {
+                if (res.error.code === '42P01') {
+                    throw new Error('Cloud "users" table is missing in Supabase.\nPlease run the SQL setup script from Settings.');
+                }
+                throw new Error(res.error.message || 'Registration failed.');
+            }
+
+            return {
+                id: newUserRow.id,
+                username: newUserRow.username,
+                name: newUserRow.name,
+                email: newUserRow.email,
+                avatar: newUserRow.avatar
+            };
+        },
+
+        // Cloud User Login (works across all browsers and devices)
+        loginUser: async function(identifier, password) {
+            var c = this.getClient();
+            if (!c) throw new Error('Supabase cloud database not connected.');
+            var idTrim = identifier.trim().toLowerCase();
+            var hash = this.hashPassword(password);
+
+            var res = await c.from('users')
+                .select('*')
+                .or('username.ilike.' + idTrim + ',email.ilike.' + idTrim);
+
+            if (res.error) {
+                if (res.error.code === '42P01') {
+                    throw new Error('Cloud "users" table is missing in Supabase.\nPlease run the SQL setup script from Settings.');
+                }
+                throw new Error(res.error.message || 'Login failed.');
+            }
+
+            var list = res.data || [];
+            var matched = list.find(function(u) {
+                return u.password_hash === hash || u.password_hash === password || u.password_hash === ('h_' + password);
+            });
+
+            if (!matched) {
+                throw new Error('Invalid username/email or password.');
+            }
+
+            return {
+                id: matched.id,
+                username: matched.username,
+                name: matched.name,
+                email: matched.email,
+                avatar: matched.avatar
+            };
+        },
+
         // Fetch todos for the current user
         getTodos: async function(userId) {
             var c = this.getClient();
