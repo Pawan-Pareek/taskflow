@@ -15,10 +15,10 @@
     <link rel="apple-touch-icon" href="icons/icon.png">
     <link rel="manifest" href="manifest.json">
 
-    <!-- Modern Typography: Outfit (Headings) & Inter (Body) -->
+    <!-- Modern Typography: Outfit (Headings) & Figtree (Body) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
 
     <!-- Stylesheet -->
     <link rel="stylesheet" href="css/styles.css">
@@ -214,7 +214,7 @@
                 <div class="date-filter-container">
                     <span>Date:</span>
                     <input type="date" id="date-filter-input" class="quick-date-picker" title="Show tasks and goals for this date">
-                    <button type="button" id="btn-clear-date-filter" class="btn-clear-date" title="Clear date filter">✕</button>
+                    <button type="button" id="btn-clear-date-filter" class="btn-clear-date" title="Clear date filter" aria-label="Clear date filter">✕</button>
                 </div>
                 <div class="sort-container">
                     <span>Sort by:</span>
@@ -229,9 +229,9 @@
 
             <!-- Week / Month navigator (Goal views only) -->
             <div id="period-nav" class="period-nav hidden">
-                <button type="button" id="btn-period-prev" class="btn-period" title="Previous">‹</button>
-                <span id="period-nav-label" class="period-nav-label"></span>
-                <button type="button" id="btn-period-next" class="btn-period" title="Next">›</button>
+                <button type="button" id="btn-period-prev" class="btn-period" title="Previous period" aria-label="Previous period">‹</button>
+                <span id="period-nav-label" class="period-nav-label" aria-live="polite"></span>
+                <button type="button" id="btn-period-next" class="btn-period" title="Next period" aria-label="Next period">›</button>
                 <button type="button" id="btn-period-current" class="btn-period-current hidden">This week</button>
             </div>
 
@@ -602,7 +602,7 @@ create policy "Allow all operations on todos" on todos for all using (true) with
     </div>
 
     <!-- Toast Notification Container -->
-    <div id="toast-container" class="toast-container"></div>
+    <div id="toast-container" class="toast-container" role="status" aria-live="polite"></div>
 
     <!-- PWA Service Worker Registration -->
     <script>

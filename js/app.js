@@ -1172,7 +1172,7 @@
                 }
 
                 item.innerHTML = `
-                    <button type="button" class="task-checkbox" aria-label="Toggle completed">
+                    <button type="button" class="task-checkbox" role="checkbox" aria-checked="${task.completed ? 'true' : 'false'}" aria-label="Mark &quot;${App.escapeHtml(task.title)}&quot; ${task.completed ? 'incomplete' : 'complete'}">
                         <span class="check-icon">${task.completed ? '✓' : ''}</span>
                     </button>
                     <div class="task-content">
@@ -1192,13 +1192,13 @@
                         </div>
                     </div>
                     <div class="task-actions">
-                        <button type="button" class="btn-action btn-star ${task.starred ? 'active' : ''}" title="Star task">
+                        <button type="button" class="btn-action btn-star ${task.starred ? 'active' : ''}" title="Star task" aria-label="${task.starred ? 'Unstar' : 'Star'} task" aria-pressed="${task.starred ? 'true' : 'false'}">
                             ${task.starred ? '★' : '☆'}
                         </button>
-                        <button type="button" class="btn-action btn-edit" title="Edit task details">
+                        <button type="button" class="btn-action btn-edit" title="Edit task details" aria-label="Edit task">
                             ✏️
                         </button>
-                        <button type="button" class="btn-action btn-delete" title="Delete task">
+                        <button type="button" class="btn-action btn-delete" title="Delete task" aria-label="Delete task">
                             🗑️
                         </button>
                     </div>
