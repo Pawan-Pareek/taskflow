@@ -21,6 +21,7 @@ Deno.serve(async () => {
     .from("todos")
     .select("id, user_id, title, notes")
     .lte("remind_at", nowIso)
+    .gte("remind_at", new Date(Date.now() - 24 * 3600 * 1000).toISOString()) // skip anything over a day late
     .eq("reminded", false)
     .eq("completed", false)
     .limit(200);
@@ -30,7 +31,15 @@ Deno.serve(async () => {
 
   let sent = 0;
   for (const todo of due) {
-    // Claim the reminder first so overlapping runs never send it twice.
+    const { data: subs } = await supabase
+      .from("push_subscriptions")
+      .select("endpoint, p256dh, auth")
+      .eq("user_id", todo.user_id);
+
+    // No phone registered yet: keep the reminder pending instead of losing it.
+    if (!subs || subs.length === 0) continue;
+
+    // Claim the reminder so overlapping runs never send it twice.
     const { data: claimed } = await supabase
       .from("todos")
       .update({ reminded: true })
@@ -38,11 +47,6 @@ Deno.serve(async () => {
       .eq("reminded", false)
       .select("id");
     if (!claimed || claimed.length === 0) continue;
-
-    const { data: subs } = await supabase
-      .from("push_subscriptions")
-      .select("endpoint, p256dh, auth")
-      .eq("user_id", todo.user_id);
 
     const payload = JSON.stringify({
       title: "⏰ Reminder",

@@ -1542,3 +1542,26 @@ html { scrollbar-color: var(--text-muted) transparent; scrollbar-width: thin; }
 .push-status-pill.on { background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald); }
 [data-theme="light"] .push-status-pill.on { color: #047857; }
 #btn-enable-push.hidden, #btn-disable-push.hidden { display: none; }
+
+/* ===== iPhone safe areas (status bar / notch / home indicator) ===== */
+.main-content {
+    padding-top: calc(28px + env(safe-area-inset-top, 0px));
+    padding-left: max(32px, env(safe-area-inset-left, 0px));
+    padding-right: max(32px, env(safe-area-inset-right, 0px));
+}
+.sidebar {
+    padding-top: calc(24px + env(safe-area-inset-top, 0px));
+    padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+}
+.toast-container { bottom: calc(24px + env(safe-area-inset-bottom, 0px)); }
+.modal-backdrop {
+    padding-top: calc(16px + env(safe-area-inset-top, 0px));
+    padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+}
+@media (max-width: 768px) {
+    .main-content {
+        padding-top: calc(16px + env(safe-area-inset-top, 0px));
+        padding-left: max(16px, env(safe-area-inset-left, 0px));
+        padding-right: max(16px, env(safe-area-inset-right, 0px));
+    }
+}
