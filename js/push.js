@@ -42,7 +42,7 @@
             }
             if (!this.supported()) return 'This browser does not support push notifications.';
             if (this.permission() === 'denied') return 'Notifications are blocked. Allow them in your browser or phone settings for this site.';
-            if (!(window.TaskSupabase && window.TaskSupabase.isEnabled())) return 'Connect Supabase cloud sync first. Reminders need the cloud to reach your phone.';
+            if (!(window.TaskSupabase && window.TaskSupabase.isEnabled())) return 'Sync is offline, so reminders cannot reach this device. Check your connection and try again.';
             if (!(window.TaskAPI && window.TaskAPI.getCurrentUser())) return 'Sign in first.';
             var key = window.TASKFLOW_CONFIG && window.TASKFLOW_CONFIG.vapidPublicKey;
             if (!key) return 'Push key is missing from config.js.';

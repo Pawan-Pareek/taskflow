@@ -559,10 +559,10 @@
             function updateSupabasePill() {
                 if (!supabaseStatusPill) return;
                 if (window.TaskSupabase && window.TaskSupabase.isEnabled()) {
-                    supabaseStatusPill.textContent = 'Connected';
+                    supabaseStatusPill.textContent = 'Synced';
                     supabaseStatusPill.classList.add('on');
                 } else {
-                    supabaseStatusPill.textContent = 'Local mode';
+                    supabaseStatusPill.textContent = 'Offline';
                     supabaseStatusPill.classList.remove('on');
                 }
             }

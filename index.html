@@ -474,75 +474,10 @@
 
             <div class="settings-section">
                 <div class="section-head">
-                    <h4>Cloud sync</h4>
-                    <span id="supabase-status-pill" class="status-pill">Local mode</span>
+                    <h4>Sync</h4>
+                    <span id="supabase-status-pill" class="status-pill">Offline</span>
                 </div>
-                <p class="section-desc">Sync tasks between devices through your Supabase project.</p>
-
-                <details class="settings-details">
-                    <summary>Connection details</summary>
-                    <div class="settings-details-body">
-                        <div class="form-group">
-                            <label for="supabase-url-input">Project URL</label>
-                            <input type="text" id="supabase-url-input" class="auth-input" placeholder="https://your-project.supabase.co" autocomplete="off">
-                        </div>
-                        <div class="form-group">
-                            <label for="supabase-key-input">Anon public key</label>
-                            <input type="password" id="supabase-key-input" class="auth-input" placeholder="eyJhbGciOiJIUzI1NiIs..." autocomplete="off">
-                        </div>
-                        <div class="btn-row" style="margin-top:12px">
-                            <button type="button" id="btn-save-supabase" class="btn btn-primary btn-sm">Save and connect</button>
-                            <button type="button" id="btn-disconnect-supabase" class="btn btn-secondary btn-sm">Disconnect</button>
-                        </div>
-                    </div>
-                </details>
-
-                <details class="settings-details">
-                    <summary>Database setup script</summary>
-                    <div class="settings-details-body">
-                        <p class="remind-hint">Run once in the Supabase SQL Editor. Reminder setup is in <code>supabase/setup-reminders.sql</code>.</p>
-                        <pre>create table if not exists users (
-  id text primary key,
-  username text unique not null,
-  name text not null,
-  email text unique not null,
-  password_hash text not null,
-  avatar text default 'avatar-1',
-  created_at timestamptz default timezone('utc'::text, now())
-);
-alter table users enable row level security;
-create policy "Allow all operations on users" on users for all using (true) with check (true);
-
-create table if not exists todos (
-  id text primary key,
-  user_id text not null,
-  title text not null,
-  notes text default '',
-  priority text default 'medium',
-  category text default 'personal',
-  due_date text,
-  completed boolean default false,
-  starred boolean default false,
-  goal_type text default 'daily',
-  remind_at timestamptz,
-  reminded boolean default false,
-  subtasks jsonb default '[]'::jsonb,
-  created_at timestamptz default timezone('utc'::text, now())
-);
-alter publication supabase_realtime add table todos;
-alter table todos enable row level security;
-create policy "Allow all operations on todos" on todos for all using (true) with check (true);</pre>
-                    </div>
-                </details>
-            </div>
-
-            <div class="settings-section">
-                <div class="section-head"><h4>How syncing works</h4></div>
-                <ul class="help-list">
-                    <li><b>Supabase cloud:</b> syncs between your phone and laptop anywhere.</li>
-                    <li><b>Local server:</b> run <code>start-server.bat</code> to sync over your Wi-Fi.</li>
-                    <li><b>Offline:</b> tasks are always saved on this device.</li>
-                </ul>
+                <p class="section-desc">Your tasks are saved on this device and kept in sync between your phone and laptop while you are online.</p>
             </div>
         </div>
     </div>
