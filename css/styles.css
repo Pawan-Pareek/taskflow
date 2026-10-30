@@ -1529,3 +1529,16 @@ html { scrollbar-color: var(--text-muted) transparent; scrollbar-width: thin; }
 @media (max-width: 768px) {
     .sidebar { height: auto; }
 }
+
+/* ===== Task reminders ===== */
+.remind-edit-row { display: flex; gap: 8px; align-items: center; }
+.remind-edit-row .form-input { flex: 1; }
+.remind-hint { color: var(--text-muted); font-size: 0.78rem; margin-top: 6px; line-height: 1.4; }
+.remind-hint:empty { display: none; }
+.badge-remind { display: inline-flex; align-items: center; gap: 4px; font-size: 0.72rem; font-weight: 600; padding: 3px 9px; border-radius: var(--radius-full); background: rgba(245, 158, 11, 0.16); color: #fbbf24; }
+.badge-remind.sent { background: var(--bg-surface-elevated); color: var(--text-muted); }
+[data-theme="light"] .badge-remind { color: #b45309; }
+.push-status-pill { font-size: 0.72rem; padding: 2px 10px; border-radius: 12px; font-weight: 600; background: var(--bg-surface-elevated); color: var(--text-muted); }
+.push-status-pill.on { background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald); }
+[data-theme="light"] .push-status-pill.on { color: #047857; }
+#btn-enable-push.hidden, #btn-disable-push.hidden { display: none; }

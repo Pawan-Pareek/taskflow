@@ -36,6 +36,25 @@
     }
     function isGoal(t) { return t.type === 'weekly' || t.type === 'monthly'; }
 
+    // Reminder helpers: remindAt is stored as a UTC ISO string, edited as local time
+    function toLocalInput(iso) {
+        if (!iso) return '';
+        var d = new Date(iso);
+        if (isNaN(d.getTime())) return '';
+        return fmtDate(d) + 'T' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+    }
+    function fromLocalInput(val) {
+        if (!val) return '';
+        var d = new Date(val);
+        return isNaN(d.getTime()) ? '' : d.toISOString();
+    }
+    function remindLabel(iso) {
+        var d = new Date(iso);
+        var today = fmtDate(new Date());
+        var day = fmtDate(d) === today ? 'Today' : MONTH_NAMES[d.getMonth()] + ' ' + d.getDate();
+        return day + ', ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+    }
+
     var FULL_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
     function periodLabel(type, dateStr) {
@@ -149,6 +168,10 @@
             setInterval(checkNewDay, 60000);
             document.addEventListener('visibilitychange', function() { if (!document.hidden) checkNewDay(); });
 
+            // In-app reminders while the page is open and this device is not push-subscribed
+            setInterval(function() { App.checkLocalReminders(); }, 20000);
+            document.addEventListener('visibilitychange', function() { if (!document.hidden) App.checkLocalReminders(); });
+
             // Render initial date and counts immediately
             this.updateViewTitle();
             this.render();
@@ -156,7 +179,33 @@
             // If user already authenticated, load tasks
             if (TaskAPI.getCurrentUser()) {
                 await this.loadTasks();
+                // Opened from a reminder notification: show that task
+                var openId = new URLSearchParams(window.location.search).get('task');
+                if (openId && tasks.some(function(t) { return t.id === openId; })) {
+                    this.openEditModal(openId);
+                    history.replaceState(null, '', window.location.pathname);
+                }
             }
+        },
+
+        checkLocalReminders: function() {
+            if (window.TaskPush && TaskPush.isOn()) return; // the server pushes to this device
+            var now = Date.now();
+            var changed = false;
+            tasks.forEach(function(t) {
+                if (!t.remindAt || t.reminded || t.completed) return;
+                var at = new Date(t.remindAt).getTime();
+                if (isNaN(at) || at > now) return;
+                t.reminded = true;
+                changed = true;
+                // Don't announce reminders that are more than 6 hours late
+                if (now - at < 6 * 3600 * 1000) {
+                    showToast('⏰ Reminder: ' + t.title, 'info');
+                    SoundFX.play('fanfare');
+                    if (window.TaskPush) TaskPush.showLocal('⏰ Reminder', t.title, t.id);
+                }
+            });
+            if (changed) this.persistTasks();
         },
 
         checkSyncStatus: async function() {
@@ -280,11 +329,13 @@
 
                 var priority = (document.getElementById('quick-priority-select') || {}).value || 'medium';
                 var category = (document.getElementById('quick-category-select') || {}).value || 'personal';
+                var remindAt = fromLocalInput((document.getElementById('quick-remind-at') || {}).value);
                 var type = (document.getElementById('quick-type-select') || {}).value || 'daily';
                 var dueDate = (document.getElementById('quick-due-date') || {}).value || self.getTodayStr();
 
                 self.addTask({
                     type: type,
+                    remindAt: remindAt,
                     title: text,
                     notes: '',
                     priority: priority,
@@ -296,6 +347,8 @@
                 });
 
                 quickAddInput.value = '';
+                var remindInput = document.getElementById('quick-remind-at');
+                if (remindInput) remindInput.value = '';
                 quickAddInput.focus();
                 SoundFX.play('pop');
                 showToast('Task added! 🎯', 'success');
@@ -429,6 +482,12 @@
                     task.notes = document.getElementById('edit-task-notes').value.trim();
                     task.priority = document.getElementById('edit-task-priority').value;
                     task.category = document.getElementById('edit-task-category').value;
+                    var newRemind = fromLocalInput(document.getElementById('edit-task-remind').value);
+                    if (newRemind !== (task.remindAt || '')) {
+                        task.remindAt = newRemind;
+                        task.reminded = false;
+                        task.remindDirty = true; // re-arm the reminder in the cloud
+                    }
                     task.type = document.getElementById('edit-task-type').value;
                     task.dueDate = periodEnd(task.type, document.getElementById('edit-task-duedate').value || self.getTodayStr());
 
@@ -552,6 +611,56 @@
                     updateSupabasePill();
                     self.checkSyncStatus();
                     showToast('Switched to Local Mode', 'info');
+                });
+            }
+
+            // Reminders: clear button + notification settings
+            var clearRemindBtn = document.getElementById('btn-clear-remind');
+            if (clearRemindBtn) {
+                clearRemindBtn.addEventListener('click', function() {
+                    document.getElementById('edit-task-remind').value = '';
+                });
+            }
+
+            var enablePushBtn = document.getElementById('btn-enable-push');
+            var disablePushBtn = document.getElementById('btn-disable-push');
+            var pushPill = document.getElementById('push-status-pill');
+            var pushHelp = document.getElementById('push-help-text');
+
+            function updatePushUI() {
+                if (!pushPill || !window.TaskPush) return;
+                var on = TaskPush.isOn();
+                var blockedNow = TaskPush.permission() === 'denied';
+                pushPill.textContent = on ? 'On' : (blockedNow ? 'Blocked' : 'Off');
+                pushPill.classList.toggle('on', on);
+                if (enablePushBtn) enablePushBtn.classList.toggle('hidden', on);
+                if (disablePushBtn) disablePushBtn.classList.toggle('hidden', !on);
+                if (pushHelp) pushHelp.textContent = on ? 'Reminders will arrive on this device, even when the app is closed.' : TaskPush.blocker();
+            }
+
+            if (settingsBtn) settingsBtn.addEventListener('click', updatePushUI);
+
+            if (enablePushBtn) {
+                enablePushBtn.addEventListener('click', async function() {
+                    enablePushBtn.disabled = true;
+                    try {
+                        await TaskPush.enable();
+                        showToast('🔔 Notifications enabled on this device', 'success');
+                        SoundFX.play('fanfare');
+                        TaskPush.showLocal('TaskFlow reminders are on', 'You will be notified at the time you set on a task.', 'taskflow-welcome');
+                    } catch (err) {
+                        showToast(err.message || 'Could not enable notifications', 'info');
+                    } finally {
+                        enablePushBtn.disabled = false;
+                        updatePushUI();
+                    }
+                });
+            }
+            if (disablePushBtn) {
+                disablePushBtn.addEventListener('click', async function() {
+                    await TaskPush.disable();
+                    showToast('Notifications turned off on this device', 'info');
+                    updatePushUI();
                 });
             }
 
@@ -899,6 +1008,9 @@
             var newTask = {
                 id: 'task_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
                 type: type,
+                remindAt: data.remindAt || '',
+                reminded: false,
+                remindDirty: !!data.remindAt,
                 title: data.title,
                 notes: data.notes || '',
                 priority: data.priority || 'medium',
@@ -968,6 +1080,7 @@
             document.getElementById('edit-task-notes').value = task.notes || '';
             document.getElementById('edit-task-priority').value = task.priority || 'medium';
             document.getElementById('edit-task-category').value = task.category || 'personal';
+            document.getElementById('edit-task-remind').value = toLocalInput(task.remindAt);
             document.getElementById('edit-task-type').value = task.type || 'daily';
             document.getElementById('edit-task-duedate').value = task.dueDate || this.getTodayStr();
 
@@ -1162,7 +1275,10 @@
                 var cat = CATEGORIES[task.category] || CATEGORIES.personal;
                 var subtasks = task.subtasks || [];
                 var completedSubtasks = subtasks.filter(st => st.completed).length;
-                var subtaskBadge = subtasks.length > 0 
+                var remindBadge = task.remindAt
+                    ? '<span class="badge-remind' + (task.reminded ? ' sent' : '') + '" title="' + (task.reminded ? 'Reminder sent' : 'Reminder set') + '">🔔 ' + remindLabel(task.remindAt) + '</span>'
+                    : '';
+                var subtaskBadge = subtasks.length > 0
                     ? `<span class="badge-subtasks">✓ ${completedSubtasks}/${subtasks.length}</span>` 
                     : '';
 
@@ -1188,6 +1304,7 @@
                                 ${App.getPriorityLabel(task.priority)}
                             </span>
                             ${dateBadge}
+                            ${remindBadge}
                             ${subtaskBadge}
                         </div>
                     </div>

@@ -263,6 +263,7 @@
                                 <option value="learning">📚 Learning</option>
                             </select>
                             <input type="date" id="quick-due-date" class="quick-date-picker" title="Due Date">
+                            <input type="datetime-local" id="quick-remind-at" class="quick-date-picker" title="Remind me at (optional)" aria-label="Remind me at (optional)">
                         </div>
                         <button type="button" class="btn-primary-gradient" id="btn-quick-add-submit">
                             <span>Add Task</span>
@@ -474,6 +475,14 @@
                     <label for="edit-task-duedate">Due Date (any day in the week/month for goals)</label>
                     <input type="date" id="edit-task-duedate" class="form-input">
                 </div>
+                <div class="form-group">
+                    <label for="edit-task-remind">🔔 Reminder</label>
+                    <div class="remind-edit-row">
+                        <input type="datetime-local" id="edit-task-remind" class="form-input">
+                        <button type="button" id="btn-clear-remind" class="btn-demo-quick" style="width: auto; padding: 8px 14px;">Clear</button>
+                    </div>
+                    <p class="remind-hint">You'll get a notification on your phone at this time. Turn on notifications in Settings first.</p>
+                </div>
 
                 <!-- Subtasks Checklist Section -->
                 <div class="subtasks-edit-section">
@@ -511,7 +520,23 @@
                 Manage your data and synchronization
             </p>
 
+            <!-- Task Reminders (Web Push) -->
             <div class="form-group">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <label style="margin: 0; font-weight: 600;">🔔 Task Reminders</label>
+                    <span id="push-status-pill" class="push-status-pill">Off</span>
+                </div>
+                <p style="color: var(--text-muted); font-size: 0.8rem; margin-bottom: 10px; line-height: 1.4;">
+                    Get a notification on this phone or computer at the time you set on a task.
+                </p>
+                <div style="display: flex; gap: 8px;">
+                    <button type="button" id="btn-enable-push" class="btn-primary-gradient" style="flex: 1; padding: 8px 14px; font-size: 0.82rem;">Enable notifications</button>
+                    <button type="button" id="btn-disable-push" class="btn-demo-quick" style="padding: 8px 14px; font-size: 0.82rem;">Turn off</button>
+                </div>
+                <p id="push-help-text" class="remind-hint"></p>
+            </div>
+
+            <div class="form-group" style="margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 16px;">
                 <label>Data Backup & Migration</label>
                 <div style="display: flex; gap: 10px; margin-top: 6px;">
                     <button type="button" id="btn-export-json" class="btn-demo-quick" style="flex: 1;">
@@ -623,6 +648,7 @@ create policy "Allow all operations on todos" on todos for all using (true) with
     <script src="js/audio.js"></script>
     <script src="js/confetti.js"></script>
     <script src="js/api.js"></script>
+    <script src="js/push.js"></script>
     <script src="js/auth.js"></script>
     <script src="js/app.js"></script>
 </body>

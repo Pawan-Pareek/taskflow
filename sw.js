@@ -60,3 +60,31 @@ self.addEventListener('fetch', (event) => {
             })
     );
 });
+
+// ---- Task reminders (Web Push) ----
+self.addEventListener('push', (event) => {
+    let data = { title: '⏰ Reminder', body: 'You have a task due.', url: '/' };
+    try { if (event.data) data = Object.assign(data, event.data.json()); } catch (e) {}
+    event.waitUntil(
+        self.registration.showNotification(data.title, {
+            body: data.body,
+            icon: './icons/icon.png',
+            badge: './icons/icon.png',
+            tag: data.taskId || 'taskflow-reminder',
+            data: { url: data.url || '/' }
+        })
+    );
+});
+
+self.addEventListener('notificationclick', (event) => {
+    event.notification.close();
+    const target = (event.notification.data && event.notification.data.url) || '/';
+    event.waitUntil(
+        self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((wins) => {
+            for (const w of wins) {
+                if ('focus' in w) return w.focus();
+            }
+            return self.clients.openWindow(target);
+        })
+    );
+});

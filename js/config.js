@@ -5,5 +5,8 @@ window.TASKFLOW_CONFIG = {
     supabaseUrl: "https://dqdejfvtsnzamqrumdzm.supabase.co",
 
     // Supabase Legacy Anon Key (JWT format - fully compatible)
-    supabaseAnonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRxZGVqZnZ0c256YW1xcnVtZHptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMxNTEzMDcsImV4cCI6MjEwODcyNzMwN30.65aa9GJLsQ_xOT1lHG1qlmpwB5um_FAyCIZXoEnM4Nc"
+    supabaseAnonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRxZGVqZnZ0c256YW1xcnVtZHptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMxNTEzMDcsImV4cCI6MjEwODcyNzMwN30.65aa9GJLsQ_xOT1lHG1qlmpwB5um_FAyCIZXoEnM4Nc",
+
+    // Web Push (VAPID) PUBLIC key for task reminders. The private key lives only in Supabase secrets.
+    vapidPublicKey: "BBGsL_KS1NRLde5VAHhJBRlbsCITilB7_RwwNpKHjnG-WLGhzZr0X7UrUqGN6Cbw3CRveA7D07bYwfd5zCtpJZY"
 };

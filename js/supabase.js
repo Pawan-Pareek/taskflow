@@ -232,6 +232,8 @@
                     priority: row.priority || 'medium',
                     category: row.category || 'personal',
                     type: row.goal_type || undefined,
+                    remindAt: row.remind_at || '',
+                    reminded: !!row.reminded,
                     dueDate: row.due_date || '',
                     completed: !!row.completed,
                     starred: !!row.starred,
@@ -249,7 +251,7 @@
             if (!todos || todos.length === 0) return;
 
             var rows = todos.map(function(t) {
-                return {
+                var row = {
                     id: t.id,
                     user_id: userId,
                     title: t.title,
@@ -257,26 +259,58 @@
                     priority: t.priority || 'medium',
                     category: t.category || 'personal',
                     goal_type: t.type || 'daily',
+                    remind_at: t.remindAt || null,
                     due_date: t.dueDate || null,
                     completed: !!t.completed,
                     starred: !!t.starred,
                     subtasks: t.subtasks || []
                 };
+                // The server flips `reminded` to true after sending. Only write it from the
+                // client when the reminder time was just set/changed, so a stale copy can
+                // never re-arm a reminder that was already delivered.
+                if (t.remindDirty) row.reminded = false;
+                return row;
             });
 
             var res = await c.from('todos').upsert(rows, { onConflict: 'id' });
-            if (res.error && /goal_type/.test(res.error.message || '')) {
-                // goal_type column not created yet: save without it so sync keeps working
-                console.warn('Supabase: add the goal_type column to persist weekly/monthly goals.');
+            if (res.error && /goal_type|remind_at|reminded/.test(res.error.message || '')) {
+                // Optional columns not created yet: save without them so sync keeps working
+                console.warn('Supabase: run supabase/setup-reminders.sql to add goal_type / remind_at / reminded.');
                 if (!window._goalTypeWarned && window.showToast) {
                     window._goalTypeWarned = true;
-                    window.showToast('Goals are saved on this device only. Add the goal_type column in Supabase to sync them (see Settings).', 'info');
+                    window.showToast('Goals and reminders are saved on this device only. Run the SQL setup in Supabase to sync them (see Settings).', 'info');
                 }
-                res = await c.from('todos').upsert(rows.map(function(r) { delete r.goal_type; return r; }), { onConflict: 'id' });
+                res = await c.from('todos').upsert(rows.map(function(r) {
+                    delete r.goal_type; delete r.remind_at; delete r.reminded; return r;
+                }), { onConflict: 'id' });
+            }
+            if (!res.error) {
+                todos.forEach(function(t) { delete t.remindDirty; });
             }
             if (res.error) {
                 console.warn('Supabase batch upsert warning:', res.error);
             }
+        },
+
+        // Web Push subscriptions (one row per phone/browser)
+        savePushSubscription: async function(userId, sub) {
+            var c = this.getClient();
+            if (!c || !userId) throw new Error('Cloud sync is not connected');
+            var json = sub.toJSON();
+            var res = await c.from('push_subscriptions').upsert({
+                endpoint: json.endpoint,
+                user_id: userId,
+                p256dh: json.keys.p256dh,
+                auth: json.keys.auth,
+                user_agent: (navigator.userAgent || '').slice(0, 200)
+            }, { onConflict: 'endpoint' });
+            if (res.error) throw new Error(res.error.message);
+        },
+
+        deletePushSubscription: async function(endpoint) {
+            var c = this.getClient();
+            if (!c) return;
+            await c.from('push_subscriptions').delete().eq('endpoint', endpoint);
         },
 
         // Delete a todo from Supabase
