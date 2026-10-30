@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "index.html"
+        ],
+        "createdAt": "2026-10-30T10:42:18.724Z",
+        "reason": "Assistant verified: .modal-card has 24px padding (20px/16px on phones) in css/styles.css; rendered screenshots show inset text. Not confirmed by the user."
+      }
+    ]
+  }
+}

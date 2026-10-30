@@ -26,7 +26,7 @@
                     'demo-user-1': [
                         {
                             id: 'task-1',
-                            title: 'Welcome to TaskFlow Pro! 🚀',
+                            title: 'Welcome to TaskFlow',
                             notes: 'Access this app on both your laptop and your mobile phone seamlessly. Try adding subtasks or changing priorities!',
                             priority: 'urgent',
                             category: 'personal',
@@ -42,7 +42,7 @@
                         },
                         {
                             id: 'task-2',
-                            title: 'Connect phone via QR Code 📱',
+                            title: 'Connect your phone via QR code',
                             notes: 'Click the "Connect Mobile" button in the sidebar or top bar to see your local Wi-Fi QR code and scan it with your phone camera!',
                             priority: 'high',
                             category: 'work',
@@ -66,7 +66,7 @@
                         },
                         {
                             id: 'task-4',
-                            title: 'Pick up groceries 🥑',
+                            title: 'Pick up groceries',
                             notes: 'Avocados, almond milk, coffee beans, dark chocolate',
                             priority: 'low',
                             category: 'shopping',
@@ -257,7 +257,7 @@
             db.todos[newUser.id] = [
                 {
                     id: 'task_' + Date.now(),
-                    title: 'Welcome to TaskFlow, ' + newUser.name + '! 👋',
+                    title: 'Welcome to TaskFlow, ' + newUser.name,
                     notes: 'This todo list syncs across your laptop and mobile phone. Bookmark it on both devices!',
                     priority: 'high',
                     category: 'personal',

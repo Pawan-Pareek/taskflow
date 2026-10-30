@@ -46,7 +46,7 @@
         init: function() {
             var c = this.getClient();
             if (c) {
-                console.log('⚡ Supabase Cloud Client initialized');
+                console.log('Supabase cloud client initialized');
             }
         },
 
@@ -336,7 +336,7 @@
                     table: 'todos',
                     filter: 'user_id=eq.' + userId
                 }, function(payload) {
-                    console.log('⚡ Supabase Realtime Change received:', payload);
+                    console.log('Supabase realtime change received:', payload);
                     if (typeof onUpdate === 'function') {
                         onUpdate(payload);
                     }

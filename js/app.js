@@ -55,6 +55,24 @@
         return day + ', ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
     }
 
+    function icon(name) {
+        return '<svg class="icon" aria-hidden="true"><use href="#i-' + name + '"/></svg>';
+    }
+    function shortDate(str) {
+        var d = parseDate(str);
+        var label = MONTH_NAMES[d.getMonth()] + ' ' + d.getDate();
+        return d.getFullYear() === new Date().getFullYear() ? label : label + ', ' + d.getFullYear();
+    }
+
+    function icon(name) {
+        return '<svg class="icon" aria-hidden="true"><use href="#i-' + name + '"/></svg>';
+    }
+    function shortDate(str) {
+        var d = parseDate(str);
+        var label = MONTH_NAMES[d.getMonth()] + ' ' + d.getDate();
+        return d.getFullYear() === new Date().getFullYear() ? label : label + ', ' + d.getFullYear();
+    }
+
     var FULL_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
     function periodLabel(type, dateStr) {
@@ -106,11 +124,11 @@
     }
 
     var CATEGORIES = {
-        personal: { name: 'Personal', icon: '👤', color: '#8b5cf6' },
-        work: { name: 'Work', icon: '💼', color: '#3b82f6' },
-        shopping: { name: 'Shopping', icon: '🛒', color: '#10b981' },
-        health: { name: 'Health', icon: '🏃', color: '#f59e0b' },
-        learning: { name: 'Learning', icon: '📚', color: '#ec4899' }
+        personal: { name: 'Personal', color: '#7c5cd6' },
+        work: { name: 'Work', color: '#2f6fd6' },
+        shopping: { name: 'Shopping', color: '#1f9d68' },
+        health: { name: 'Health', color: '#d9890b' },
+        learning: { name: 'Learning', color: '#c8458a' }
     };
 
     var PRIORITY_WEIGHTS = {
@@ -200,9 +218,9 @@
                 changed = true;
                 // Don't announce reminders that are more than 6 hours late
                 if (now - at < 6 * 3600 * 1000) {
-                    showToast('⏰ Reminder: ' + t.title, 'info');
+                    showToast('Reminder: ' + t.title, 'info');
                     SoundFX.play('fanfare');
-                    if (window.TaskPush) TaskPush.showLocal('⏰ Reminder', t.title, t.id);
+                    if (window.TaskPush) TaskPush.showLocal('Reminder', t.title, t.id);
                 }
             });
             if (changed) this.persistTasks();
@@ -323,7 +341,7 @@
                         quickCard.classList.add('shake');
                         setTimeout(function() { quickCard.classList.remove('shake'); }, 500);
                     }
-                    showToast('Type a task first! ✍️', 'info');
+                    showToast('Type a task first', 'info');
                     return;
                 }
 
@@ -351,7 +369,7 @@
                 if (remindInput) remindInput.value = '';
                 quickAddInput.focus();
                 SoundFX.play('pop');
-                showToast('Task added! 🎯', 'success');
+                showToast('Task added', 'success');
 
                 // Auto-switch view so the new task is visible
                 if (type !== 'daily' && currentFilter !== 'all' && currentFilter !== type) {
@@ -541,13 +559,11 @@
             function updateSupabasePill() {
                 if (!supabaseStatusPill) return;
                 if (window.TaskSupabase && window.TaskSupabase.isEnabled()) {
-                    supabaseStatusPill.textContent = '🟢 Connected';
-                    supabaseStatusPill.style.background = 'rgba(16, 185, 129, 0.15)';
-                    supabaseStatusPill.style.color = 'var(--color-success)';
+                    supabaseStatusPill.textContent = 'Connected';
+                    supabaseStatusPill.classList.add('on');
                 } else {
-                    supabaseStatusPill.textContent = '⚪ Local Mode';
-                    supabaseStatusPill.style.background = 'rgba(148, 163, 184, 0.15)';
-                    supabaseStatusPill.style.color = 'var(--text-muted)';
+                    supabaseStatusPill.textContent = 'Local mode';
+                    supabaseStatusPill.classList.remove('on');
                 }
             }
 
@@ -583,7 +599,7 @@
                         await window.TaskSupabase.saveConfig(url, key);
                         updateSupabasePill();
                         self.checkSyncStatus();
-                        showToast('⚡ Supabase Connected & Synced!', 'success');
+                        showToast('Connected and synced', 'success');
                         SoundFX.play('fanfare');
 
                         // Sync current tasks up to Supabase if any exist
@@ -645,7 +661,7 @@
                     enablePushBtn.disabled = true;
                     try {
                         await TaskPush.enable();
-                        showToast('🔔 Notifications enabled on this device', 'success');
+                        showToast('Notifications enabled on this device', 'success');
                         SoundFX.play('fanfare');
                         TaskPush.showLocal('TaskFlow reminders are on', 'You will be notified at the time you set on a task.', 'taskflow-welcome');
                     } catch (err) {
@@ -675,7 +691,7 @@
                     document.body.appendChild(downloadAnchor);
                     downloadAnchor.click();
                     downloadAnchor.remove();
-                    showToast('Backup downloaded! 📦', 'success');
+                    showToast('Backup downloaded', 'success');
                 });
             }
 
@@ -692,7 +708,7 @@
                             if (Array.isArray(imported)) {
                                 tasks = imported;
                                 await self.persistTasks();
-                                showToast('Tasks imported successfully! ✨', 'success');
+                                showToast('Tasks imported', 'success');
                                 SoundFX.play('fanfare');
                                 settingsModal.classList.add('hidden');
                             } else {
@@ -733,24 +749,29 @@
 
         setupThemeToggle: function() {
             var toggleBtns = document.querySelectorAll('.btn-theme-toggle');
-            var currentTheme = localStorage.getItem('taskflow_theme') || 'dark';
+            var mq = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
 
+            function effectiveTheme() {
+                return document.documentElement.getAttribute('data-theme') || (mq && mq.matches ? 'dark' : 'light');
+            }
+            function paintToggle() {
+                toggleBtns.forEach(b => b.innerHTML = effectiveTheme() === 'dark' ? icon('sun') : icon('moon'));
+            }
             function applyTheme(theme) {
-                if (theme === 'light') {
-                    document.documentElement.setAttribute('data-theme', 'light');
-                    toggleBtns.forEach(b => b.innerHTML = '🌙');
-                } else {
-                    document.documentElement.removeAttribute('data-theme');
-                    toggleBtns.forEach(b => b.innerHTML = '☀️');
-                }
-                localStorage.setItem('taskflow_theme', theme);
+                document.documentElement.setAttribute('data-theme', theme);
+                try { localStorage.setItem('taskflow_theme_choice', theme); } catch (e) {}
+                paintToggle();
             }
 
-            applyTheme(currentTheme);
+            var saved = null;
+            try { saved = localStorage.getItem('taskflow_theme_choice'); } catch (e) {}
+            if (saved === 'light' || saved === 'dark') document.documentElement.setAttribute('data-theme', saved);
+            paintToggle();
+            if (mq && mq.addEventListener) mq.addEventListener('change', paintToggle);
 
             toggleBtns.forEach(function(btn) {
                 btn.addEventListener('click', function() {
-                    var nowTheme = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+                    var nowTheme = effectiveTheme() === 'dark' ? 'light' : 'dark';
                     applyTheme(nowTheme);
                     SoundFX.play('pop');
                 });
@@ -760,7 +781,7 @@
         setupSoundToggle: function() {
             var soundBtns = document.querySelectorAll('.btn-sound-toggle');
             function updateIcons(enabled) {
-                soundBtns.forEach(b => b.innerHTML = enabled ? '🔔' : '🔕');
+                soundBtns.forEach(b => b.innerHTML = enabled ? icon('bell') : icon('bell-off'));
             }
             updateIcons(SoundFX.isEnabled());
 
@@ -768,7 +789,7 @@
                 btn.addEventListener('click', function() {
                     var enabled = SoundFX.toggle();
                     updateIcons(enabled);
-                    showToast(enabled ? 'Sound FX Enabled' : 'Sound FX Muted', 'info');
+                    showToast(enabled ? 'Sounds on' : 'Sounds off', 'info');
                 });
             });
         },
@@ -821,7 +842,7 @@
                     var url = mobileUrlEl.textContent;
                     if (navigator.clipboard) {
                         navigator.clipboard.writeText(url).then(function() {
-                            showToast('Mobile link copied! 📋', 'success');
+                            showToast('Link copied', 'success');
                             SoundFX.play('pop');
                         });
                     }
@@ -960,16 +981,16 @@
 
             if (currentCategory !== 'all') {
                 var catMeta = CATEGORIES[currentCategory];
-                if (titleEl) titleEl.textContent = (catMeta ? catMeta.icon + ' ' + catMeta.name : 'Category');
+                if (titleEl) titleEl.textContent = (catMeta ? catMeta.name : 'Category');
             } else {
                 var titles = {
-                    today: 'Today’s Focus',
-                    all: 'All Tasks',
-                    upcoming: 'Upcoming Tasks',
-                    weekly: '🗓️ Weekly Goals',
-                    monthly: '🎯 Monthly Goals',
-                    starred: 'Starred / Important',
-                    completed: 'Completed Tasks'
+                    today: 'Today',
+                    all: 'All tasks',
+                    upcoming: 'Upcoming',
+                    weekly: 'Weekly goals',
+                    monthly: 'Monthly goals',
+                    starred: 'Starred',
+                    completed: 'Completed'
                 };
                 if (titleEl) titleEl.textContent = titles[currentFilter] || 'Tasks';
             }
@@ -1040,12 +1061,9 @@
                 var allDone = todayTasks.length > 0 && todayTasks.every(t => t.completed);
 
                 if (allDone) {
-                    SoundFX.play('fanfare');
-                    Confetti.burst(window.innerWidth / 2, window.innerHeight * 0.4, 65);
-                    showToast('All tasks for today completed! Amazing! 🌟', 'success');
+                    showToast('All tasks for today are done', 'success');
                 } else {
-                    Confetti.burst(window.innerWidth * 0.7, window.innerHeight * 0.6, 25);
-                    showToast('Task completed! 🎉', 'success');
+                    showToast('Task completed', 'success');
                 }
             } else {
                 delete task.completedAt;
@@ -1104,7 +1122,7 @@
 
             var subtasks = task.subtasks || [];
             if (subtasks.length === 0) {
-                container.innerHTML = '<div class="subtask-empty-hint">No checklist items yet. Add subtasks below!</div>';
+                container.innerHTML = '<div class="subtask-empty-hint">No checklist items yet.</div>';
                 return;
             }
 
@@ -1113,10 +1131,10 @@
                 row.className = 'subtask-item-row' + (st.completed ? ' completed' : '');
                 row.innerHTML = `
                     <button type="button" class="subtask-check-btn" data-st-index="${index}">
-                        ${st.completed ? '✓' : ''}
+                        ${st.completed ? icon('check') : ''}
                     </button>
                     <span class="subtask-title-text">${App.escapeHtml(st.title)}</span>
-                    <button type="button" class="subtask-delete-btn" data-st-delete-index="${index}" title="Remove subtask">✕</button>
+                    <button type="button" class="subtask-delete-btn" data-st-delete-index="${index}" title="Remove item" aria-label="Remove item">${icon('x')}</button>
                 `;
 
                 row.querySelector('.subtask-check-btn').addEventListener('click', function() {
@@ -1256,11 +1274,11 @@
             var sorted = this.sortTasks(filtered);
 
             if (sorted.length === 0) {
-                var emptyMsg = searchQuery ? 'No tasks found matching "' + this.escapeHtml(searchQuery) + '"' : 'No tasks in this view. Enjoy your day! 🌿';
+                var emptyMsg = searchQuery ? 'No tasks found matching "' + this.escapeHtml(searchQuery) + '"' : 'Nothing to show in this view.';
                 container.innerHTML = `
                     <div class="empty-state-card">
-                        <div class="empty-icon">✨</div>
-                        <h3>All Clear!</h3>
+                        <div class="empty-icon">${icon('inbox')}</div>
+                        <h3>No tasks</h3>
                         <p>${emptyMsg}</p>
                     </div>
                 `;
@@ -1276,20 +1294,20 @@
                 var subtasks = task.subtasks || [];
                 var completedSubtasks = subtasks.filter(st => st.completed).length;
                 var remindBadge = task.remindAt
-                    ? '<span class="badge-remind' + (task.reminded ? ' sent' : '') + '" title="' + (task.reminded ? 'Reminder sent' : 'Reminder set') + '">🔔 ' + remindLabel(task.remindAt) + '</span>'
+                    ? '<span class="badge-remind' + (task.reminded ? ' sent' : '') + '" title="' + (task.reminded ? 'Reminder sent' : 'Reminder set') + '">' + icon('bell') + remindLabel(task.remindAt) + '</span>'
                     : '';
                 var subtaskBadge = subtasks.length > 0
-                    ? `<span class="badge-subtasks">✓ ${completedSubtasks}/${subtasks.length}</span>` 
+                    ? `<span class="badge-subtasks">${icon('check')}${completedSubtasks}/${subtasks.length}</span>` 
                     : '';
 
                 var dateBadge = App.formatDateBadge(task.dueDate, task.completed, task.type);
                 if (goalRolledOver(task, App.getTodayStr()) && currentFilter === task.type) {
-                    dateBadge = '<span class="badge-date badge-rollover" title="Unfinished from an earlier ' + (task.type === 'monthly' ? 'month' : 'week') + '">↻ Rolled over</span>' + dateBadge;
+                    dateBadge = '<span class="badge-date badge-rollover" title="Unfinished from an earlier ' + (task.type === 'monthly' ? 'month' : 'week') + '">' + icon('repeat') + 'Rolled over</span>' + dateBadge;
                 }
 
                 item.innerHTML = `
                     <button type="button" class="task-checkbox" role="checkbox" aria-checked="${task.completed ? 'true' : 'false'}" aria-label="Mark &quot;${App.escapeHtml(task.title)}&quot; ${task.completed ? 'incomplete' : 'complete'}">
-                        <span class="check-icon">${task.completed ? '✓' : ''}</span>
+                        <span class="check-icon">${task.completed ? icon('check') : ''}</span>
                     </button>
                     <div class="task-content">
                         <div class="task-title-row">
@@ -1297,9 +1315,7 @@
                         </div>
                         ${task.notes ? `<p class="task-notes-snippet">${App.escapeHtml(task.notes)}</p>` : ''}
                         <div class="task-meta-row">
-                            <span class="badge-category" style="--cat-color: ${cat.color}">
-                                ${cat.icon} ${cat.name}
-                            </span>
+                            <span class="badge-category" style="--cat-color: ${cat.color}">${cat.name}</span>
                             <span class="badge-priority priority-${task.priority}">
                                 ${App.getPriorityLabel(task.priority)}
                             </span>
@@ -1310,13 +1326,13 @@
                     </div>
                     <div class="task-actions">
                         <button type="button" class="btn-action btn-star ${task.starred ? 'active' : ''}" title="Star task" aria-label="${task.starred ? 'Unstar' : 'Star'} task" aria-pressed="${task.starred ? 'true' : 'false'}">
-                            ${task.starred ? '★' : '☆'}
+                            ${icon('star')}
                         </button>
                         <button type="button" class="btn-action btn-edit" title="Edit task details" aria-label="Edit task">
-                            ✏️
+                            ${icon('pencil')}
                         </button>
                         <button type="button" class="btn-action btn-delete" title="Delete task" aria-label="Delete task">
-                            🗑️
+                            ${icon('trash')}
                         </button>
                     </div>
                 `;
@@ -1367,26 +1383,26 @@
                     ? MONTH_NAMES[e.getMonth()] + ' ' + e.getFullYear()
                     : MONTH_NAMES[s.getMonth()] + ' ' + s.getDate() + ' – ' + MONTH_NAMES[e.getMonth()] + ' ' + e.getDate();
                 var cls = (dueDate < today && !isCompleted && !goalRolledOver({ type: type, dueDate: dueDate, completed: false }, today)) ? ' overdue' : '';
-                return '<span class="badge-date badge-goal' + cls + '">' + (type === 'monthly' ? '🎯 Month: ' : '🗓️ Week: ') + label + '</span>';
+                return '<span class="badge-date badge-goal' + cls + '">' + (type === 'monthly' ? 'Month: ' : 'Week: ') + label + '</span>';
             }
 
             if (dueDate === today) {
-                return '<span class="badge-date today">📅 Today</span>';
+                return '<span class="badge-date today">Today</span>';
             } else if (dueDate === tomorrowStr) {
-                return '<span class="badge-date tomorrow">📅 Tomorrow</span>';
+                return '<span class="badge-date tomorrow">Tomorrow</span>';
             } else if (dueDate < today && !isCompleted) {
-                return '<span class="badge-date overdue">⚠️ Overdue</span>';
+                return '<span class="badge-date overdue">Overdue · ' + shortDate(dueDate) + '</span>';
             } else {
-                return '<span class="badge-date">📅 ' + dueDate + '</span>';
+                return '<span class="badge-date">' + shortDate(dueDate) + '</span>';
             }
         },
 
         getPriorityLabel: function(priority) {
             var labels = {
-                urgent: '🔥 Urgent',
-                high: '⚡ High',
-                medium: '🔷 Medium',
-                low: '☕ Low'
+                urgent: 'Urgent',
+                high: 'High priority',
+                medium: 'Medium',
+                low: 'Low'
             };
             return labels[priority] || 'Medium';
         },

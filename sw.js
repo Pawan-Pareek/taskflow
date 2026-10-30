@@ -63,7 +63,7 @@ self.addEventListener('fetch', (event) => {
 
 // ---- Task reminders (Web Push) ----
 self.addEventListener('push', (event) => {
-    let data = { title: '⏰ Reminder', body: 'You have a task due.', url: '/' };
+    let data = { title: 'Reminder', body: 'You have a task due.', url: '/' };
     try { if (event.data) data = Object.assign(data, event.data.json()); } catch (e) {}
     event.waitUntil(
         self.registration.showNotification(data.title, {

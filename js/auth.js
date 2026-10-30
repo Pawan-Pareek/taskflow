@@ -1,12 +1,12 @@
 // TaskFlow Authentication Manager
 (function(window) {
     var AVATAR_OPTIONS = [
-        { id: 'avatar-1', label: 'Violet Glow', emoji: '⚡', gradient: 'linear-gradient(135deg, #8b5cf6, #d946ef)' },
-        { id: 'avatar-2', label: 'Cyan Ocean', emoji: '🌊', gradient: 'linear-gradient(135deg, #06b6d4, #3b82f6)' },
-        { id: 'avatar-3', label: 'Emerald Spark', emoji: '🌿', gradient: 'linear-gradient(135deg, #10b981, #059669)' },
-        { id: 'avatar-4', label: 'Solar Flare', emoji: '🔥', gradient: 'linear-gradient(135deg, #f59e0b, #ef4444)' },
-        { id: 'avatar-5', label: 'Cosmic Star', emoji: '✨', gradient: 'linear-gradient(135deg, #6366f1, #a855f7)' },
-        { id: 'avatar-6', label: 'Sakura Sunset', emoji: '🌸', gradient: 'linear-gradient(135deg, #ec4899, #f43f5e)' }
+        { id: 'avatar-1', label: 'Blue', color: '#2563eb' },
+        { id: 'avatar-2', label: 'Teal', color: '#0f766e' },
+        { id: 'avatar-3', label: 'Green', color: '#15803d' },
+        { id: 'avatar-4', label: 'Orange', color: '#c2410c' },
+        { id: 'avatar-5', label: 'Violet', color: '#6d28d9' },
+        { id: 'avatar-6', label: 'Rose', color: '#be185d' }
     ];
 
     var selectedAvatar = 'avatar-1';
@@ -34,8 +34,9 @@
                 var btn = document.createElement('button');
                 btn.type = 'button';
                 btn.className = 'avatar-option' + (av.id === selectedAvatar ? ' selected' : '');
-                btn.style.background = av.gradient;
-                btn.innerHTML = '<span>' + av.emoji + '</span>';
+                btn.style.background = av.color;
+                btn.innerHTML = '<svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>';
+                btn.setAttribute('aria-label', av.label);
                 btn.title = av.label;
                 btn.addEventListener('click', function() {
                     selectedAvatar = av.id;
@@ -241,10 +242,10 @@
                     var input = btn.previousElementSibling;
                     if (input.type === 'password') {
                         input.type = 'text';
-                        btn.textContent = '🙈';
+                        btn.innerHTML = '<svg class="icon" aria-hidden="true"><use href="#i-eye-off"/></svg>';
                     } else {
                         input.type = 'password';
-                        btn.textContent = '👁️';
+                        btn.innerHTML = '<svg class="icon" aria-hidden="true"><use href="#i-eye"/></svg>';
                     }
                 });
             });
@@ -266,7 +267,7 @@
             this.updateUI();
             this.hideModal();
             window.dispatchEvent(new CustomEvent('taskflow:login', { detail: user }));
-            window.showToast('Signed in as ' + (user.name || user.username) + ' ✨', 'success');
+            window.showToast('Signed in as ' + (user.name || user.username), 'success');
         },
 
         updateUI: function() {
@@ -280,8 +281,8 @@
                 profileNames.forEach(function(el) { el.textContent = user.name || user.username; });
                 profileEmails.forEach(function(el) { el.textContent = user.email || '@' + user.username; });
                 profileAvatars.forEach(function(el) {
-                    el.style.background = meta.gradient;
-                    el.textContent = meta.emoji;
+                    el.style.background = meta.color;
+                    el.textContent = ((user.name || user.username || '?').trim().charAt(0) || '?').toUpperCase();
                 });
             }
         }
