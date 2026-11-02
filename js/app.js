@@ -1081,6 +1081,10 @@
                 if (titleEl) titleEl.textContent = titles[currentFilter] || 'Tasks';
             }
 
+            // A list with no dates has nothing for the date filter to act on
+            var dateFilterBox = document.querySelector('.date-filter-container');
+            if (dateFilterBox) dateFilterBox.classList.toggle('hidden', currentCategory === 'all' && currentFilter === 'custom');
+
             var periodNav = document.getElementById('period-nav');
             var inGoalView = currentCategory === 'all' && (currentFilter === 'weekly' || currentFilter === 'monthly');
             if (periodNav) periodNav.classList.toggle('hidden', !inGoalView);

@@ -481,21 +481,43 @@ input, textarea { caret-color: var(--accent); }
     .sidebar.mobile-open { transform: translateX(0); }
     .mobile-bar-left { display: flex; }
     .search-kbd-hint, .top-bar .btn-open-connect-mobile { display: none; }
-    .top-bar { margin-bottom: 16px; }
-    .search-bar-container { max-width: none; }
+    /* Top bar: menu and actions on one row, search gets its own full-width row */
+    .top-bar { flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+    .top-actions-cluster { gap: 0; }
+    .search-bar-container { order: 3; flex: 1 1 100%; max-width: none; }
 
     .main-content { padding: calc(12px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) calc(96px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
     .view-heading h2 { font-size: 1.45rem; }
-    .view-tools { width: 100%; justify-content: space-between; }
 
+    /* Date filter and sort share one row; their labels stay for screen readers only */
+    .view-header { gap: 10px; }
+    .view-tools { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 8px; width: 100%; }
+    .date-filter-container, .sort-container { min-width: 0; gap: 0; }
+    .date-filter-container label, .sort-container label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    .view-tools .quick-date-picker, .view-tools .sort-select { flex: 1; width: 100%; min-width: 0; padding: 0 8px; font-size: 0.9375rem; }
+    .view-tools .btn-clear-date { flex-shrink: 0; width: 32px; min-width: 32px; }
+    .view-tools:has(.date-filter-container.hidden) { grid-template-columns: minmax(0, 1fr); }
+
+    /* Composer: type/priority, category/date, then the reminder across the full width */
     .quick-add-controls { flex-direction: column; align-items: stretch; }
-    .quick-options-left { display: grid; grid-template-columns: 1fr 1fr; }
+    .quick-options-left { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; width: 100%; }
     .quick-options-left > * { width: 100%; min-width: 0; }
-    
+    .quick-options-left .quick-date-picker { padding: 0 8px; font-size: 0.9375rem; }
+    .quick-options-left #quick-remind-at { grid-column: 1 / -1; }
+    .quick-options-left:has(#quick-due-date.hidden) #quick-category-select { grid-column: 1 / -1; }
 
-    .task-actions { opacity: 1; }
-    .task-item { padding: 12px; }
+    /* Task rows: tapping the task opens the editor, so the pencil is dropped to give titles room */
+    .task-actions { opacity: 1; gap: 0; margin-right: -8px; }
+    .task-actions .btn-edit { display: none; }
+    .task-item { gap: 10px; padding: 12px; }
     .btn-action { width: 36px; height: 36px; }
+
+    /* Drawer: tighter rows so the progress card and Sign out are reachable without a long scroll */
+    .sidebar .nav-item-btn { min-height: 40px; }
+    .sidebar .nav-group-title { margin: 12px 0 4px; }
+    .sidebar .brand-section { padding-bottom: 12px; }
+    .sidebar-footer { padding-top: 12px; }
+    .sidebar .nav-rename-btn { width: 36px; height: 36px; min-width: 36px; min-height: 36px; }
 
     .mobile-bottom-nav {
         display: block; position: fixed; left: 0; right: 0; bottom: 0; z-index: 800;
@@ -517,8 +539,15 @@ input, textarea { caret-color: var(--accent); }
     .modal-backdrop { align-items: flex-end; padding: 0; }
     .modal-card { max-width: none; max-height: 92dvh; border-radius: var(--radius-lg) var(--radius-lg) 0 0; border-bottom: none; padding: 20px 16px calc(20px + env(safe-area-inset-bottom, 0px)); animation: sheet-in 260ms var(--ease); }
     @keyframes sheet-in { from { transform: translateY(24px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-    .form-row { grid-template-columns: 1fr; gap: 0; }
+    .form-row { gap: 0 10px; }
+    .form-row .form-input, .form-row .form-select { padding-left: 10px; padding-right: 10px; min-width: 0; }
     .period-nav-label { min-width: 0; flex: 1; }
+    /* Keep Save / Cancel in reach while a long form scrolls */
+    .modal-actions { position: sticky; bottom: calc(-20px - env(safe-area-inset-bottom, 0px)); margin: 22px -16px calc(-20px - env(safe-area-inset-bottom, 0px)); padding: 12px 16px calc(20px + env(safe-area-inset-bottom, 0px)); background: var(--surface); border-top: 1px solid var(--border); }
+}
+
+@media (max-width: 340px) {
+    .form-row { grid-template-columns: 1fr; gap: 0; }
 }
 
 /* Touch devices: comfortable targets */
