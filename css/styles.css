@@ -218,6 +218,10 @@ input, textarea { caret-color: var(--accent); }
 }
 .nav-item-btn:hover { background: var(--surface-2); color: var(--text); }
 .nav-item-btn.active { background: var(--accent-soft); color: var(--accent-text); font-weight: 600; }
+.nav-custom-row { display: flex; align-items: center; gap: 2px; }
+.nav-rename-btn { width: 30px; height: 30px; min-width: 30px; color: var(--muted); }
+.nav-rename-btn .icon { width: 15px; height: 15px; }
+.nav-rename-btn:hover { color: var(--text); }
 .nav-icon { display: inline-flex; width: 18px; height: 18px; }
 .nav-label { flex: 1; }
 .nav-badge-count { font-size: 0.8rem; font-weight: 500; color: var(--muted); min-width: 18px; text-align: right; }

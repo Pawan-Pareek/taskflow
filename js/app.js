@@ -35,6 +35,15 @@
         return dueDate;
     }
     function isGoal(t) { return t.type === 'weekly' || t.type === 'monthly'; }
+    // Custom list: user-named, no due date. Reminders work as on any other task.
+    function isCustom(t) { return t.type === 'custom'; }
+    function isDated(t) { return !isGoal(t) && !isCustom(t); }
+
+    var CUSTOM_NAME_KEY = 'taskflow_custom_list_name';
+    var DEFAULT_CUSTOM_NAME = 'My list';
+    function customName() {
+        try { return localStorage.getItem(CUSTOM_NAME_KEY) || DEFAULT_CUSTOM_NAME; } catch (e) { return DEFAULT_CUSTOM_NAME; }
+    }
 
     // Reminder helpers: remindAt is stored as a UTC ISO string, edited as local time
     function toLocalInput(iso) {
@@ -105,7 +114,7 @@
     function saveTypeMap(list) {
         try {
             var map = {};
-            list.forEach(function(t) { if (isGoal(t)) map[t.id] = t.type; });
+            list.forEach(function(t) { if (isGoal(t) || isCustom(t)) map[t.id] = t.type; });
             localStorage.setItem(TYPE_KEY, JSON.stringify(map));
         } catch (e) {}
     }
@@ -160,7 +169,8 @@
             this.setupConnectMobileModal();
             this.setupThemeToggle();
             this.setupSoundToggle();
-            
+            this.setupCustomList();
+
             // Check server and update status indicator
             this.checkSyncStatus();
             
@@ -255,6 +265,7 @@
                     tasks = [];
                 }
                 this.render();
+                this.syncCustomName();
 
                 // Heal the cloud copy if goal types had to be restored from this device
                 if (typesRestored) {
@@ -374,7 +385,7 @@
                 // Auto-switch view so the new task is visible
                 if (type !== 'daily' && currentFilter !== 'all' && currentFilter !== type) {
                     self.setFilter(type);
-                } else if (type === 'daily' && (currentFilter === 'weekly' || currentFilter === 'monthly')) {
+                } else if (type === 'daily' && (currentFilter === 'weekly' || currentFilter === 'monthly' || currentFilter === 'custom')) {
                     self.setFilter('today');
                 } else if (currentFilter === 'completed') {
                     self.setFilter('today');
@@ -507,7 +518,7 @@
                         task.remindDirty = true; // re-arm the reminder in the cloud
                     }
                     task.type = document.getElementById('edit-task-type').value;
-                    task.dueDate = periodEnd(task.type, document.getElementById('edit-task-duedate').value || self.getTodayStr());
+                    task.dueDate = isCustom(task) ? '' : periodEnd(task.type, document.getElementById('edit-task-duedate').value || self.getTodayStr());
 
                     self.persistTasks();
                     self.closeEditModal();
@@ -778,6 +789,79 @@
             });
         },
 
+        // Rename the custom list, and hide due-date inputs while it is the selected type
+        setupCustomList: function() {
+            var self = this;
+            var renameBtn = document.getElementById('btn-rename-custom');
+            if (renameBtn) {
+                renameBtn.addEventListener('click', function() {
+                    var next = prompt('Rename this list', customName());
+                    if (next === null) return;
+                    next = next.trim().slice(0, 40);
+                    next = next || DEFAULT_CUSTOM_NAME;
+                    self.setCustomName(next);
+                    SoundFX.play('pop');
+                    showToast('List renamed', 'success');
+                    // Save to the cloud so every device gets the new name (latest rename wins)
+                    var u = TaskAPI.getCurrentUser();
+                    if (u && window.TaskSupabase && TaskSupabase.isEnabled()) {
+                        TaskSupabase.saveCustomListName(u.id, next);
+                    }
+                });
+            }
+            var quickType = document.getElementById('quick-type-select');
+            var editType = document.getElementById('edit-task-type');
+            if (quickType) quickType.addEventListener('change', function() { self.syncDueDateInputs(); });
+            if (editType) editType.addEventListener('change', function() { self.syncDueDateInputs(); });
+            this.applyCustomName();
+            this.syncDueDateInputs();
+        },
+
+        setCustomName: function(name) {
+            try { localStorage.setItem(CUSTOM_NAME_KEY, name); } catch (e) {}
+            this.applyCustomName();
+            this.updateViewTitle();
+        },
+
+        // Pull the shared list name from the cloud and overwrite the local copy
+        syncCustomName: async function() {
+            var u = TaskAPI.getCurrentUser();
+            if (!u || !window.TaskSupabase || !TaskSupabase.isEnabled()) return;
+            var cloud = await TaskSupabase.getCustomListName(u.id);
+            if (cloud === null) return; // table missing or offline: keep the local name
+            if (cloud) {
+                if (cloud !== customName()) this.setCustomName(cloud);
+            } else if (customName() !== DEFAULT_CUSTOM_NAME) {
+                // Nothing in the cloud yet: publish this device's existing name
+                TaskSupabase.saveCustomListName(u.id, customName());
+            }
+            if (!this._settingsSubscribed) {
+                this._settingsSubscribed = true;
+                TaskSupabase.subscribeToSettings(u.id, function(payload) {
+                    var row = payload && payload.new;
+                    if (row && row.custom_list_name && row.custom_list_name !== customName()) {
+                        App.setCustomName(row.custom_list_name);
+                    }
+                });
+            }
+        },
+
+        applyCustomName: function() {
+            var name = customName();
+            var label = document.getElementById('custom-list-label');
+            if (label) label.textContent = name;
+            document.querySelectorAll('option[value="custom"]').forEach(function(o) { o.textContent = name; });
+        },
+
+        syncDueDateInputs: function() {
+            var quickType = document.getElementById('quick-type-select');
+            var editType = document.getElementById('edit-task-type');
+            var quickDate = document.getElementById('quick-due-date');
+            var editGroup = document.getElementById('edit-duedate-group');
+            if (quickDate && quickType) quickDate.classList.toggle('hidden', quickType.value === 'custom');
+            if (editGroup && editType) editGroup.classList.toggle('hidden', editType.value === 'custom');
+        },
+
         setupSoundToggle: function() {
             var soundBtns = document.querySelectorAll('.btn-sound-toggle');
             function updateIcons(enabled) {
@@ -939,9 +1023,10 @@
             currentCategory = 'all';
 
             // Keep the quick-add type in sync with the view the user is in
-            var typeByView = { weekly: 'weekly', monthly: 'monthly', today: 'daily', upcoming: 'daily' };
+            var typeByView = { weekly: 'weekly', monthly: 'monthly', custom: 'custom', today: 'daily', upcoming: 'daily' };
             var typeSelect = document.getElementById('quick-type-select');
             if (typeSelect && typeByView[filter]) typeSelect.value = typeByView[filter];
+            this.syncDueDateInputs();
 
             document.querySelectorAll('[data-filter]').forEach(function(el) {
                 if (el.getAttribute('data-filter') === filter) {
@@ -989,6 +1074,7 @@
                     upcoming: 'Upcoming',
                     weekly: 'Weekly goals',
                     monthly: 'Monthly goals',
+                    custom: customName(),
                     starred: 'Starred',
                     completed: 'Completed'
                 };
@@ -1036,7 +1122,7 @@
                 notes: data.notes || '',
                 priority: data.priority || 'medium',
                 category: data.category || 'personal',
-                dueDate: periodEnd(type, data.dueDate || this.getTodayStr()),
+                dueDate: type === 'custom' ? '' : periodEnd(type, data.dueDate || this.getTodayStr()),
                 completed: false,
                 starred: !!data.starred,
                 subtasks: data.subtasks || [],
@@ -1057,7 +1143,7 @@
                 SoundFX.play('check');
 
                 // Check if all today's tasks are finished
-                var todayTasks = tasks.filter(t => !isGoal(t) && t.dueDate === this.getTodayStr());
+                var todayTasks = tasks.filter(t => isDated(t) && t.dueDate === this.getTodayStr());
                 var allDone = todayTasks.length > 0 && todayTasks.every(t => t.completed);
 
                 if (allDone) {
@@ -1101,6 +1187,7 @@
             document.getElementById('edit-task-remind').value = toLocalInput(task.remindAt);
             document.getElementById('edit-task-type').value = task.type || 'daily';
             document.getElementById('edit-task-duedate').value = task.dueDate || this.getTodayStr();
+            this.syncDueDateInputs();
 
             this.renderEditSubtasks(task);
 
@@ -1172,7 +1259,7 @@
                 }
 
                 // Date filter: item's day / week / month must cover the selected date
-                var goalView = currentCategory === 'all' && (currentFilter === 'weekly' || currentFilter === 'monthly');
+                var goalView = currentCategory === 'all' && (currentFilter === 'weekly' || currentFilter === 'monthly' || currentFilter === 'custom');
                 if (selectedDate && !goalView) {
                     var due = t.dueDate || '';
                     if (!due || selectedDate < periodStart(t.type, due) || selectedDate > due) return false;
@@ -1183,12 +1270,15 @@
                     if (currentFilter === 'weekly' || currentFilter === 'monthly') {
                         return t.type === currentFilter && goalInPeriod(t, selectedDate || todayStr, todayStr);
                     }
+                    if (currentFilter === 'custom') {
+                        return isCustom(t);
+                    }
                     if (currentFilter === 'today') {
-                        if (selectedDate) return true;
-                        return !isGoal(t) && (t.dueDate === todayStr || (!t.completed && t.dueDate < todayStr));
+                        if (selectedDate) return isDated(t);
+                        return isDated(t) && (t.dueDate === todayStr || (!t.completed && t.dueDate < todayStr));
                     } else if (currentFilter === 'upcoming') {
-                        if (selectedDate) return true;
-                        return !isGoal(t) && t.dueDate > todayStr;
+                        if (selectedDate) return isDated(t);
+                        return isDated(t) && t.dueDate > todayStr;
                     } else if (currentFilter === 'starred') {
                         return t.starred;
                     } else if (currentFilter === 'completed') {
@@ -1234,8 +1324,9 @@
             var todayStr = this.getTodayStr();
             var counts = {
                 all: tasks.filter(t => !t.completed).length,
-                today: tasks.filter(t => !isGoal(t) && !t.completed && t.dueDate <= todayStr).length,
-                upcoming: tasks.filter(t => !isGoal(t) && !t.completed && t.dueDate > todayStr).length,
+                today: tasks.filter(t => isDated(t) && !t.completed && t.dueDate <= todayStr).length,
+                upcoming: tasks.filter(t => isDated(t) && !t.completed && t.dueDate > todayStr).length,
+                custom: tasks.filter(t => isCustom(t) && !t.completed).length,
                 weekly: tasks.filter(t => t.type === 'weekly' && !t.completed && goalInPeriod(t, todayStr, todayStr)).length,
                 monthly: tasks.filter(t => t.type === 'monthly' && !t.completed && goalInPeriod(t, todayStr, todayStr)).length,
                 starred: tasks.filter(t => t.starred && !t.completed).length,
@@ -1250,7 +1341,7 @@
 
         updateProgressCard: function() {
             var todayStr = this.getTodayStr();
-            var todayTasks = tasks.filter(t => !isGoal(t) && t.dueDate === todayStr);
+            var todayTasks = tasks.filter(t => isDated(t) && t.dueDate === todayStr);
             var completedCount = todayTasks.filter(t => t.completed).length;
             var totalCount = todayTasks.length;
 
@@ -1370,7 +1461,7 @@
         },
 
         formatDateBadge: function(dueDate, isCompleted, type) {
-            if (!dueDate) return '';
+            if (!dueDate || type === 'custom') return '';
             var today = this.getTodayStr();
             var tomorrow = new Date();
             tomorrow.setDate(tomorrow.getDate() + 1);

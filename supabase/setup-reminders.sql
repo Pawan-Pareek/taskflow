@@ -19,6 +19,16 @@ create index if not exists push_subscriptions_user_idx on push_subscriptions (us
 alter table push_subscriptions enable row level security;
 create policy "Allow all operations on push_subscriptions" on push_subscriptions for all using (true) with check (true);
 
+-- 2b) Per-user settings (custom list name). One row per user; the latest rename wins.
+create table if not exists user_settings (
+  user_id text primary key,
+  custom_list_name text,
+  updated_at timestamptz default timezone('utc'::text, now())
+);
+alter table user_settings enable row level security;
+create policy "Allow all operations on user_settings" on user_settings for all using (true) with check (true);
+alter publication supabase_realtime add table user_settings;
+
 -- 3) Run the send-reminders Edge Function every minute
 -- (deploy the function first; see supabase/README-reminders.md. The request carries the
 --  project public anon key, so the function keeps JWT verification on.)

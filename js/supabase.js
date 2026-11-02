@@ -6,6 +6,7 @@
     
     var client = null;
     var realtimeChannel = null;
+    var settingsChannel = null;
 
     var TaskSupabase = {
         getUrl: function() {
@@ -290,6 +291,49 @@
             if (res.error) {
                 console.warn('Supabase batch upsert warning:', res.error);
             }
+        },
+
+        // Custom list name (one row per user; the latest rename overwrites the old one)
+        getCustomListName: async function(userId) {
+            var c = this.getClient();
+            if (!c || !userId) return null;
+            var res = await c.from('user_settings').select('custom_list_name').eq('user_id', userId).maybeSingle();
+            if (res.error) {
+                console.warn('Supabase getCustomListName warning (run supabase/setup-reminders.sql):', res.error);
+                return null;
+            }
+            return res.data ? (res.data.custom_list_name || '') : null;
+        },
+
+        saveCustomListName: async function(userId, name) {
+            var c = this.getClient();
+            if (!c || !userId) return false;
+            var res = await c.from('user_settings').upsert({
+                user_id: userId,
+                custom_list_name: name,
+                updated_at: new Date().toISOString()
+            }, { onConflict: 'user_id' });
+            if (res.error) {
+                console.warn('Supabase saveCustomListName warning (run supabase/setup-reminders.sql):', res.error);
+                return false;
+            }
+            return true;
+        },
+
+        subscribeToSettings: function(userId, onUpdate) {
+            var c = this.getClient();
+            if (!c || !userId) return;
+            if (settingsChannel) c.removeChannel(settingsChannel);
+            settingsChannel = c.channel('public:user_settings:' + userId)
+                .on('postgres_changes', {
+                    event: '*',
+                    schema: 'public',
+                    table: 'user_settings',
+                    filter: 'user_id=eq.' + userId
+                }, function(payload) {
+                    if (typeof onUpdate === 'function') onUpdate(payload);
+                })
+                .subscribe();
         },
 
         // Web Push subscriptions (one row per phone/browser)

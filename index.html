@@ -109,6 +109,11 @@
                 <li><button type="button" class="nav-item-btn" data-filter="monthly" id="nav-filter-monthly">
                     <svg class="icon nav-icon" aria-hidden="true"><use href="#i-target"/></svg>
                     <span class="nav-label">Monthly goals</span><span class="nav-badge-count" id="count-monthly">0</span></button></li>
+                <li class="nav-custom-row"><button type="button" class="nav-item-btn" data-filter="custom" id="nav-filter-custom">
+                    <svg class="icon nav-icon" aria-hidden="true"><use href="#i-list"/></svg>
+                    <span class="nav-label" id="custom-list-label">My list</span><span class="nav-badge-count" id="count-custom">0</span></button>
+                    <button type="button" class="icon-btn nav-rename-btn" id="btn-rename-custom" title="Rename this list" aria-label="Rename this list">
+                        <svg class="icon" aria-hidden="true"><use href="#i-pencil"/></svg></button></li>
             </ul>
 
             <div class="nav-group-title">Categories</div>
@@ -218,6 +223,7 @@
                                 <option value="daily" selected>Daily task</option>
                                 <option value="weekly">Weekly goal</option>
                                 <option value="monthly">Monthly goal</option>
+                                <option value="custom">My list</option>
                             </select>
                             <select id="quick-priority-select" class="quick-pill-select" title="Priority" aria-label="Priority">
                                 <option value="urgent">Urgent</option>
@@ -400,9 +406,10 @@
                             <option value="daily">Daily task</option>
                             <option value="weekly">Weekly goal</option>
                             <option value="monthly">Monthly goal</option>
+                            <option value="custom">My list</option>
                         </select>
                     </div>
-                    <div class="form-group">
+                    <div class="form-group" id="edit-duedate-group">
                         <label for="edit-task-duedate">Due date</label>
                         <input type="date" id="edit-task-duedate" class="form-input">
                     </div>
