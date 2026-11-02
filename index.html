@@ -181,7 +181,7 @@
                 <div class="view-tools">
                     <div class="date-filter-container">
                         <label for="date-filter-input">Date</label>
-                        <input type="date" id="date-filter-input" class="quick-date-picker" title="Show tasks and goals for this date">
+                        <input type="date" id="date-filter-input" class="quick-date-picker" data-placeholder="Any date" title="Show tasks and goals for this date">
                         <button type="button" id="btn-clear-date-filter" class="btn-clear-date" title="Clear date filter" aria-label="Clear date filter">
                             <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
                         </button>
@@ -239,7 +239,14 @@
                                 <option value="learning">Learning</option>
                             </select>
                             <input type="date" id="quick-due-date" class="quick-date-picker" title="Due date" aria-label="Due date">
-                            <input type="datetime-local" id="quick-remind-at" class="quick-date-picker" title="Remind me at (optional)" aria-label="Remind me at (optional)">
+                            <select id="quick-repeat-select" class="quick-pill-select" title="Repeat" aria-label="Repeat">
+                                <option value="" selected>Does not repeat</option>
+                                <option value="daily">Every day</option>
+                                <option value="weekdays">Every weekday</option>
+                                <option value="weekly">Every week</option>
+                                <option value="monthly">Every month</option>
+                            </select>
+                            <input type="datetime-local" id="quick-remind-at" class="quick-date-picker" data-placeholder="Remind me (optional)" title="Remind me at (optional)" aria-label="Remind me at (optional)">
                         </div>
 
                     </div>
@@ -411,15 +418,27 @@
                     </div>
                     <div class="form-group" id="edit-duedate-group">
                         <label for="edit-task-duedate">Due date</label>
-                        <input type="date" id="edit-task-duedate" class="form-input">
+                        <input type="date" id="edit-task-duedate" class="form-input" data-placeholder="Pick a date">
                     </div>
                 </div>
                 <p class="remind-hint" style="margin-top:4px">For a weekly or monthly goal, pick any day in that week or month.</p>
 
+                <div class="form-group" id="edit-repeat-group">
+                    <label for="edit-task-repeat">Repeat</label>
+                    <select id="edit-task-repeat" class="form-select">
+                        <option value="">Does not repeat</option>
+                        <option value="daily">Every day</option>
+                        <option value="weekdays">Every weekday</option>
+                        <option value="weekly">Every week</option>
+                        <option value="monthly">Every month</option>
+                    </select>
+                    <p class="remind-hint">When you complete it, the next one is added automatically.</p>
+                </div>
+
                 <div class="form-group">
                     <label for="edit-task-remind">Reminder</label>
                     <div class="remind-edit-row">
-                        <input type="datetime-local" id="edit-task-remind" class="form-input">
+                        <input type="datetime-local" id="edit-task-remind" class="form-input" data-placeholder="No reminder">
                         <button type="button" id="btn-clear-remind" class="btn btn-secondary">Clear</button>
                     </div>
                     <p class="remind-hint">A notification is sent to your phone at this time. Turn on notifications in Settings first.</p>

@@ -233,6 +233,8 @@
                     priority: row.priority || 'medium',
                     category: row.category || 'personal',
                     type: row.goal_type || undefined,
+                    repeat: row.repeat_rule || '',
+                    repeatDay: row.repeat_day || undefined,
                     remindAt: row.remind_at || '',
                     reminded: !!row.reminded,
                     dueDate: row.due_date || '',
@@ -260,6 +262,8 @@
                     priority: t.priority || 'medium',
                     category: t.category || 'personal',
                     goal_type: t.type || 'daily',
+                    repeat_rule: t.repeat || null,
+                    repeat_day: t.repeat ? (t.repeatDay || null) : null,
                     remind_at: t.remindAt || null,
                     due_date: t.dueDate || null,
                     completed: !!t.completed,
@@ -274,7 +278,7 @@
             });
 
             var res = await c.from('todos').upsert(rows, { onConflict: 'id' });
-            if (res.error && /goal_type|remind_at|reminded/.test(res.error.message || '')) {
+            if (res.error && /goal_type|remind_at|reminded|repeat_rule|repeat_day/.test(res.error.message || '')) {
                 // Optional columns not created yet: save without them so sync keeps working
                 console.warn('Supabase: run supabase/setup-reminders.sql to add goal_type / remind_at / reminded.');
                 if (!window._goalTypeWarned && window.showToast) {
@@ -282,7 +286,7 @@
                     window.showToast('Goals and reminders are saved on this device only. Run the SQL setup in Supabase to sync them (see Settings).', 'info');
                 }
                 res = await c.from('todos').upsert(rows.map(function(r) {
-                    delete r.goal_type; delete r.remind_at; delete r.reminded; return r;
+                    delete r.goal_type; delete r.remind_at; delete r.reminded; delete r.repeat_rule; delete r.repeat_day; return r;
                 }), { onConflict: 'id' });
             }
             if (!res.error) {

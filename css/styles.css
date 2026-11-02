@@ -336,7 +336,7 @@ input, textarea { caret-color: var(--accent); }
 .task-meta-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-top: 6px; font-size: 0.8rem; color: var(--muted); }
 .task-meta-row .icon { width: 13px; height: 13px; }
 
-.badge-category, .badge-priority, .badge-date, .badge-remind, .badge-subtasks { display: inline-flex; align-items: center; gap: 5px; font-size: 0.8rem; font-weight: 500; color: var(--muted); }
+.badge-category, .badge-priority, .badge-date, .badge-remind, .badge-subtasks, .badge-repeat { display: inline-flex; align-items: center; gap: 5px; font-size: 0.8rem; font-weight: 500; color: var(--muted); }
 .badge-category::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--cat-color, var(--muted)); }
 .badge-priority.priority-medium, .badge-priority.priority-low { display: none; }
 .badge-priority.priority-urgent { color: var(--p-urgent); font-weight: 600; }
@@ -345,7 +345,7 @@ input, textarea { caret-color: var(--accent); }
 .badge-date.tomorrow { color: var(--text-2); }
 .badge-date.overdue, .badge-date.badge-goal.overdue { color: var(--danger); font-weight: 600; }
 .badge-date.badge-rollover { color: var(--warn); font-weight: 600; }
-.badge-remind { color: var(--text-2); }
+.badge-remind, .badge-repeat { color: var(--text-2); }
 .badge-remind.sent { color: var(--muted); }
 
 .task-actions { display: flex; gap: 2px; margin: -4px -6px -4px 0; opacity: 0; transition: opacity 120ms var(--ease); }
@@ -476,9 +476,10 @@ input, textarea { caret-color: var(--accent); }
     .sidebar {
         position: fixed; left: 0; top: 0; bottom: 0; height: auto;
         transform: translateX(-100%); transition: transform 250ms var(--ease);
-        z-index: 1000; width: 84%; max-width: 320px; box-shadow: var(--shadow-lg);
+        z-index: 1000; width: 84%; max-width: 320px;
+        visibility: hidden; transition: transform 250ms var(--ease), visibility 0s linear 250ms;
     }
-    .sidebar.mobile-open { transform: translateX(0); }
+    .sidebar.mobile-open { transform: translateX(0); visibility: visible; box-shadow: var(--shadow-lg); transition-delay: 0s; }
     .mobile-bar-left { display: flex; }
     .search-kbd-hint, .top-bar .btn-open-connect-mobile { display: none; }
     /* Top bar: menu and actions on one row, search gets its own full-width row */
@@ -503,7 +504,7 @@ input, textarea { caret-color: var(--accent); }
     .quick-options-left { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; width: 100%; }
     .quick-options-left > * { width: 100%; min-width: 0; }
     .quick-options-left .quick-date-picker { padding: 0 8px; font-size: 0.9375rem; }
-    .quick-options-left #quick-remind-at { grid-column: 1 / -1; }
+    .quick-options-left #quick-remind-at, .quick-options-left #quick-repeat-select { grid-column: 1 / -1; }
     .quick-options-left:has(#quick-due-date.hidden) #quick-category-select { grid-column: 1 / -1; }
 
     /* Task rows: tapping the task opens the editor, so the pencil is dropped to give titles room */
@@ -511,6 +512,15 @@ input, textarea { caret-color: var(--accent); }
     .task-actions .btn-edit { display: none; }
     .task-item { gap: 10px; padding: 12px; }
     .btn-action { width: 36px; height: 36px; }
+
+    /* Selects: draw our own control so iOS matches the date inputs */
+    .quick-pill-select, .sort-select, .form-select {
+        -webkit-appearance: none; appearance: none;
+        padding-right: 28px;
+        background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+        background-position: calc(100% - 15px) 50%, calc(100% - 10px) 50%;
+        background-size: 5px 5px, 5px 5px; background-repeat: no-repeat;
+    }
 
     /* Drawer: tighter rows so the progress card and Sign out are reachable without a long scroll */
     .sidebar .nav-item-btn { min-height: 40px; }
@@ -548,6 +558,16 @@ input, textarea { caret-color: var(--accent); }
 
 @media (max-width: 340px) {
     .form-row { grid-template-columns: 1fr; gap: 0; }
+}
+
+/* iOS Safari draws empty date / time inputs as blank boxes: show a hint instead */
+@supports (-webkit-touch-callout: none) {
+    input[type="date"], input[type="datetime-local"] { -webkit-appearance: none; appearance: none; position: relative; display: block; text-align: left; line-height: 1.2; }
+    input[type="date"].is-empty::-webkit-datetime-edit, input[type="datetime-local"].is-empty::-webkit-datetime-edit { opacity: 0; }
+    input[type="date"].is-empty::before, input[type="datetime-local"].is-empty::before {
+        content: attr(data-placeholder); position: absolute; left: 10px; right: 10px; top: 50%; transform: translateY(-50%);
+        color: var(--muted); font-size: 0.9375rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none;
+    }
 }
 
 /* Touch devices: comfortable targets */

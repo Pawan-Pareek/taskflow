@@ -4,6 +4,8 @@
 alter table todos add column if not exists goal_type text default 'daily';
 alter table todos add column if not exists remind_at timestamptz;
 alter table todos add column if not exists reminded boolean default false;
+alter table todos add column if not exists repeat_rule text;
+alter table todos add column if not exists repeat_day int;
 create index if not exists todos_due_reminders_idx on todos (remind_at) where reminded = false;
 
 -- 2) Phones / browsers that accepted notifications

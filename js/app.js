@@ -39,6 +39,28 @@
     function isCustom(t) { return t.type === 'custom'; }
     function isDated(t) { return !isGoal(t) && !isCustom(t); }
 
+    // Recurring tasks: completing one adds the next occurrence
+    var REPEAT_LABELS = { daily: 'Every day', weekdays: 'Every weekday', weekly: 'Every week', monthly: 'Every month' };
+    function nextOccurrence(rule, from, day) {
+        var d = parseDate(from);
+        if (rule === 'weekly') { d.setDate(d.getDate() + 7); return fmtDate(d); }
+        if (rule === 'monthly') {
+            var last = new Date(d.getFullYear(), d.getMonth() + 2, 0).getDate();
+            return fmtDate(new Date(d.getFullYear(), d.getMonth() + 1, Math.min(day || d.getDate(), last)));
+        }
+        do { d.setDate(d.getDate() + 1); } while (rule === 'weekdays' && (d.getDay() === 0 || d.getDay() === 6));
+        return fmtDate(d);
+    }
+    // The next due date is always after both the old due date and today, so finishing a
+    // task late never piles up copies in the past.
+    function nextRecurDue(t, todayStr) {
+        var floor = t.dueDate > todayStr ? t.dueDate : todayStr;
+        var next = nextOccurrence(t.repeat, t.dueDate, t.repeatDay);
+        for (var guard = 0; next <= floor && guard < 50000; guard++) next = nextOccurrence(t.repeat, next, t.repeatDay);
+        return next;
+    }
+    function isRecurring(t) { return !!t.repeat && isDated(t) && !!t.dueDate; }
+
     var CUSTOM_NAME_KEY = 'taskflow_custom_list_name';
     var DEFAULT_CUSTOM_NAME = 'My list';
     function customName() {
@@ -110,17 +132,32 @@
     // Remember goal types on this device. If the cloud table has no goal_type column,
     // the type would otherwise be lost on every reload / realtime refresh.
     var TYPE_KEY = 'taskflow_goal_types';
+    var REPEAT_KEY = 'taskflow_repeat_rules';
     var typesRestored = false;
     function saveTypeMap(list) {
         try {
             var map = {};
-            list.forEach(function(t) { if (isGoal(t) || isCustom(t)) map[t.id] = t.type; });
+            var rmap = {};
+            list.forEach(function(t) {
+                if (isGoal(t) || isCustom(t)) map[t.id] = t.type;
+                if (t.repeat) rmap[t.id] = { r: t.repeat, d: t.repeatDay || 0 };
+            });
             localStorage.setItem(TYPE_KEY, JSON.stringify(map));
+            localStorage.setItem(REPEAT_KEY, JSON.stringify(rmap));
         } catch (e) {}
     }
     function applyKnownTypes(list) {
         var map = {};
         try { map = JSON.parse(localStorage.getItem(TYPE_KEY) || '{}'); } catch (e) {}
+        var rmap = {};
+        try { rmap = JSON.parse(localStorage.getItem(REPEAT_KEY) || '{}'); } catch (e) {}
+        list.forEach(function(t) {
+            if (!t.repeat && rmap[t.id]) {
+                t.repeat = rmap[t.id].r;
+                t.repeatDay = rmap[t.id].d || undefined;
+                typesRestored = true;
+            }
+        });
         // The cloud column defaults to 'daily', so treat 'daily' like "unknown" when we
         // remember this task as a goal; the restored type is then written back to the cloud.
         list.forEach(function(t) {
@@ -361,9 +398,12 @@
                 var remindAt = fromLocalInput((document.getElementById('quick-remind-at') || {}).value);
                 var type = (document.getElementById('quick-type-select') || {}).value || 'daily';
                 var dueDate = (document.getElementById('quick-due-date') || {}).value || self.getTodayStr();
+                var repeatSelect = document.getElementById('quick-repeat-select');
+                var repeat = type === 'daily' && repeatSelect ? repeatSelect.value : '';
 
                 self.addTask({
                     type: type,
+                    repeat: repeat,
                     remindAt: remindAt,
                     title: text,
                     notes: '',
@@ -378,6 +418,7 @@
                 quickAddInput.value = '';
                 var remindInput = document.getElementById('quick-remind-at');
                 if (remindInput) remindInput.value = '';
+                if (repeatSelect) repeatSelect.value = ''; // don't carry a repeat onto the next task
                 quickAddInput.focus();
                 SoundFX.play('pop');
                 showToast('Task added', 'success');
@@ -518,7 +559,11 @@
                         task.remindDirty = true; // re-arm the reminder in the cloud
                     }
                     task.type = document.getElementById('edit-task-type').value;
+                    var repeatVal = document.getElementById('edit-task-repeat').value;
                     task.dueDate = isCustom(task) ? '' : periodEnd(task.type, document.getElementById('edit-task-duedate').value || self.getTodayStr());
+
+                    task.repeat = task.type === 'daily' ? repeatVal : '';
+                    task.repeatDay = task.repeat ? parseDate(task.dueDate).getDate() : undefined;
 
                     self.persistTasks();
                     self.closeEditModal();
@@ -646,6 +691,7 @@
             if (clearRemindBtn) {
                 clearRemindBtn.addEventListener('click', function() {
                     document.getElementById('edit-task-remind').value = '';
+                    self.refreshDateInputs();
                 });
             }
 
@@ -815,6 +861,11 @@
             if (editType) editType.addEventListener('change', function() { self.syncDueDateInputs(); });
             this.applyCustomName();
             this.syncDueDateInputs();
+            ['input', 'change'].forEach(function(ev) {
+                document.addEventListener(ev, function(e) {
+                    if (e.target && e.target.matches && e.target.matches('input[type="date"], input[type="datetime-local"]')) self.refreshDateInputs();
+                });
+            });
         },
 
         setCustomName: function(name) {
@@ -860,6 +911,10 @@
             var editGroup = document.getElementById('edit-duedate-group');
             if (quickDate && quickType) quickDate.classList.toggle('hidden', quickType.value === 'custom');
             if (editGroup && editType) editGroup.classList.toggle('hidden', editType.value === 'custom');
+            var quickRepeat = document.getElementById('quick-repeat-select');
+            var editRepeat = document.getElementById('edit-repeat-group');
+            if (quickRepeat && quickType) quickRepeat.classList.toggle('hidden', quickType.value !== 'daily');
+            if (editRepeat && editType) editRepeat.classList.toggle('hidden', editType.value !== 'daily');
         },
 
         setupSoundToggle: function() {
@@ -1126,6 +1181,7 @@
                 notes: data.notes || '',
                 priority: data.priority || 'medium',
                 category: data.category || 'personal',
+                repeat: type === 'daily' ? (data.repeat || '') : '',
                 dueDate: type === 'custom' ? '' : periodEnd(type, data.dueDate || this.getTodayStr()),
                 completed: false,
                 starred: !!data.starred,
@@ -1133,6 +1189,7 @@
                 createdAt: new Date().toISOString()
             };
 
+            if (newTask.repeat) newTask.repeatDay = parseDate(newTask.dueDate).getDate();
             tasks.unshift(newTask);
             this.persistTasks();
         },
@@ -1150,7 +1207,10 @@
                 var todayTasks = tasks.filter(t => isDated(t) && t.dueDate === this.getTodayStr());
                 var allDone = todayTasks.length > 0 && todayTasks.every(t => t.completed);
 
-                if (allDone) {
+                if (isRecurring(task) && !task.spawnedId) {
+                    var next = this.spawnNextOccurrence(task);
+                    showToast('Done. Next one: ' + shortDate(next.dueDate), 'success');
+                } else if (allDone) {
                     showToast('All tasks for today are done', 'success');
                 } else {
                     showToast('Task completed', 'success');
@@ -1158,9 +1218,56 @@
             } else {
                 delete task.completedAt;
                 SoundFX.play('uncheck');
+                // Undoing a recurring task removes the copy that was added for it, if untouched
+                if (task.spawnedId) {
+                    var copy = tasks.find(t => t.id === task.spawnedId);
+                    if (copy && !copy.completed) {
+                        tasks = tasks.filter(t => t.id !== copy.id);
+                        TaskAPI.deleteTodo(copy.id);
+                    }
+                    delete task.spawnedId;
+                }
             }
 
             this.persistTasks();
+        },
+
+        // Add the next occurrence of a recurring task (same details, fresh checklist, shifted reminder)
+        spawnNextOccurrence: function(task) {
+            var nextDue = nextRecurDue(task, this.getTodayStr());
+            var copy = {
+                id: 'task_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+                type: 'daily',
+                repeat: task.repeat,
+                repeatDay: task.repeatDay,
+                remindAt: '',
+                reminded: false,
+                title: task.title,
+                notes: task.notes || '',
+                priority: task.priority,
+                category: task.category,
+                dueDate: nextDue,
+                completed: false,
+                starred: !!task.starred,
+                subtasks: (task.subtasks || []).map(function(st, i) {
+                    return { id: 'st_' + Date.now() + '_' + i, title: st.title, completed: false };
+                }),
+                createdAt: new Date().toISOString()
+            };
+            if (task.remindAt) {
+                var r = new Date(task.remindAt);
+                if (!isNaN(r.getTime())) {
+                    var offset = Math.round((new Date(r.getFullYear(), r.getMonth(), r.getDate()) - parseDate(task.dueDate)) / 86400000);
+                    var at = parseDate(nextDue);
+                    at.setDate(at.getDate() + offset);
+                    at.setHours(r.getHours(), r.getMinutes(), 0, 0);
+                    copy.remindAt = at.toISOString();
+                    copy.remindDirty = true;
+                }
+            }
+            task.spawnedId = copy.id;
+            tasks.unshift(copy);
+            return copy;
         },
 
         toggleStar: function(id) {
@@ -1191,7 +1298,9 @@
             document.getElementById('edit-task-remind').value = toLocalInput(task.remindAt);
             document.getElementById('edit-task-type').value = task.type || 'daily';
             document.getElementById('edit-task-duedate').value = task.dueDate || this.getTodayStr();
+            document.getElementById('edit-task-repeat').value = task.repeat || '';
             this.syncDueDateInputs();
+            this.refreshDateInputs();
 
             this.renderEditSubtasks(task);
 
@@ -1317,7 +1426,15 @@
             });
         },
 
+        // Mark empty date inputs so CSS can show a hint (iOS renders them blank)
+        refreshDateInputs: function() {
+            document.querySelectorAll('input[type="date"], input[type="datetime-local"]').forEach(function(el) {
+                el.classList.toggle('is-empty', !el.value);
+            });
+        },
+
         render: function() {
+            this.refreshDateInputs();
             this.updateBadgeCounts();
             this.updateProgressCard();
             this.updateViewTitle();
@@ -1391,6 +1508,9 @@
                 var remindBadge = task.remindAt
                     ? '<span class="badge-remind' + (task.reminded ? ' sent' : '') + '" title="' + (task.reminded ? 'Reminder sent' : 'Reminder set') + '">' + icon('bell') + remindLabel(task.remindAt) + '</span>'
                     : '';
+                var repeatBadge = isRecurring(task)
+                    ? '<span class="badge-repeat" title="Repeats automatically">' + icon('repeat') + REPEAT_LABELS[task.repeat] + '</span>'
+                    : '';
                 var subtaskBadge = subtasks.length > 0
                     ? `<span class="badge-subtasks">${icon('check')}${completedSubtasks}/${subtasks.length}</span>` 
                     : '';
@@ -1416,6 +1536,7 @@
                             </span>
                             ${dateBadge}
                             ${remindBadge}
+                            ${repeatBadge}
                             ${subtaskBadge}
                         </div>
                     </div>
