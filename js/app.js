@@ -248,6 +248,7 @@
             this.setupSoundToggle();
             this.setupCustomList();
             this.setupCategories();
+            this.setupNotifAlerts();
 
             // Check server and update status indicator
             this.checkSyncStatus();
@@ -899,6 +900,179 @@
                     if (e.target && e.target.matches && e.target.matches('input[type="date"], input[type="datetime-local"]')) self.refreshDateInputs();
                 });
             });
+        },
+
+        // ---- Notification alerts: user-made schedules, sent by the send-notification-alerts Edge Function ----
+        setupNotifAlerts: function() {
+            var self = this;
+            var MAX_ALERTS = 5;
+            var DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            var PRESETS = {
+                morning: { name: 'Morning nudge', kind: 'nudge', send_time: '08:00', days: '0,1,2,3,4,5,6', subject: 'Plan your day', message: 'Good morning! Take a minute to add what you want to get done today.' },
+                night: { name: 'Night summary', kind: 'remaining', send_time: '21:00', days: '0,1,2,3,4,5,6', subject: '', message: 'Here is what is still open from today.' }
+            };
+            var modal = document.getElementById('notif-alert-modal');
+            var form = document.getElementById('notif-alert-form');
+            var listEl = document.getElementById('notif-alert-list');
+            if (!modal || !form || !listEl) return;
+            var alerts = [];
+            var editingId = null;
+
+            var cloudOn = function() { return !!(window.TaskSupabase && TaskSupabase.isEnabled() && TaskAPI.getCurrentUser()); };
+            var $ = function(id) { return document.getElementById(id); };
+            var daysSummary = function(days) {
+                var set = days.split(',').map(Number);
+                if (set.length === 7) return 'Every day';
+                if (set.length === 5 && [1, 2, 3, 4, 5].every(function(d) { return set.indexOf(d) >= 0; })) return 'Weekdays';
+                return set.slice().sort().map(function(d) { return DAY_NAMES[d]; }).join(', ');
+            };
+            var timeLabel = function(hhmm) {
+                var p = hhmm.split(':');
+                var d = new Date(); d.setHours(+p[0], +p[1], 0, 0);
+                return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+            };
+
+            // Day chips
+            var dayBox = $('ea-days');
+            DAY_NAMES.forEach(function(n, i) {
+                var b = document.createElement('button');
+                b.type = 'button'; b.className = 'day-chip'; b.textContent = n[0]; b.title = n;
+                b.setAttribute('data-day', i); b.setAttribute('aria-pressed', 'false'); b.setAttribute('aria-label', n);
+                b.addEventListener('click', function() { b.setAttribute('aria-pressed', b.getAttribute('aria-pressed') === 'true' ? 'false' : 'true'); });
+                dayBox.appendChild(b);
+            });
+            var getDays = function() {
+                return [].slice.call(dayBox.children).filter(function(b) { return b.getAttribute('aria-pressed') === 'true'; })
+                    .map(function(b) { return b.getAttribute('data-day'); }).join(',');
+            };
+            var setDays = function(days) {
+                var set = days.split(',');
+                [].forEach.call(dayBox.children, function(b) { b.setAttribute('aria-pressed', set.indexOf(b.getAttribute('data-day')) >= 0 ? 'true' : 'false'); });
+            };
+            var showError = function(msg) { var e = $('ea-error'); e.textContent = msg || ''; e.classList.toggle('hidden', !msg); };
+
+            var render = function() {
+                listEl.innerHTML = '';
+                var empty = $('notif-alert-empty');
+                if (!cloudOn()) {
+                    empty.textContent = 'Notification alerts need cloud sync. Sign in with your synced account to use them.';
+                    empty.classList.remove('hidden');
+                } else if (!alerts.length) {
+                    empty.textContent = 'No alerts yet. Create your own or start from a quick start below.';
+                    empty.classList.remove('hidden');
+                } else {
+                    empty.classList.add('hidden');
+                }
+                alerts.forEach(function(a) {
+                    var row = document.createElement('div');
+                    row.className = 'notif-alert-row';
+                    row.innerHTML =
+                        '<button type="button" class="notif-alert-main" data-id="' + a.id + '">' +
+                        '<span class="notif-alert-name">' + App.escapeHtml(a.name) + '</span>' +
+                        '<span class="notif-alert-meta">' + timeLabel(a.send_time) + ' · ' + daysSummary(a.days) + ' · ' + (a.kind === 'remaining' ? 'Remaining tasks' : 'Add-tasks nudge') + '</span></button>' +
+                        '<label class="switch" title="' + (a.enabled ? 'On' : 'Off') + '"><input type="checkbox" data-toggle="' + a.id + '"' + (a.enabled ? ' checked' : '') + ' aria-label="Enable ' + App.escapeHtml(a.name) + '"><span class="switch-track"></span></label>';
+                    listEl.appendChild(row);
+                });
+                var add = $('btn-add-notif-alert');
+                add.disabled = !cloudOn() || alerts.length >= MAX_ALERTS;
+                add.lastChild.textContent = alerts.length >= MAX_ALERTS ? 'Limit reached (' + MAX_ALERTS + ')' : 'New alert';
+                document.querySelectorAll('#notif-alert-presets .chip-btn').forEach(function(b) { b.disabled = add.disabled; });
+            };
+
+            self.refreshNotifAlerts = async function() {
+                var u = TaskAPI.getCurrentUser();
+                alerts = (cloudOn() && await TaskSupabase.listNotifAlerts(u.id)) || [];
+                render();
+            };
+
+            var openEditor = function(a) {
+                editingId = a.id || null;
+                $('notif-alert-heading').textContent = editingId ? 'Edit notification alert' : 'New notification alert';
+                $('ea-name').value = a.name || '';
+                $('ea-kind').value = a.kind || 'nudge';
+                $('ea-time').value = a.send_time || '08:00';
+                $('ea-subject').value = a.subject || '';
+                $('ea-message').value = a.message || '';
+                setDays(a.days || '0,1,2,3,4,5,6');
+                showError('');
+                $('btn-delete-notif-alert').classList.toggle('hidden', !editingId);
+                $('btn-test-notif-alert').classList.toggle('hidden', !editingId);
+                modal.classList.remove('hidden');
+                SoundFX.play('pop');
+            };
+            var close = function() { modal.classList.add('hidden'); };
+
+            $('btn-add-notif-alert').addEventListener('click', function() { openEditor({}); });
+            document.querySelectorAll('#notif-alert-presets .chip-btn').forEach(function(b) {
+                b.addEventListener('click', function() { openEditor(PRESETS[b.getAttribute('data-preset')]); });
+            });
+            $('btn-close-notif-alert').addEventListener('click', close);
+            modal.addEventListener('click', function(e) { if (e.target === modal) close(); });
+
+            listEl.addEventListener('click', function(e) {
+                var main = e.target.closest('.notif-alert-main');
+                if (main) openEditor(alerts.find(function(a) { return a.id === main.getAttribute('data-id'); }) || {});
+            });
+            listEl.addEventListener('change', async function(e) {
+                var id = e.target.getAttribute('data-toggle');
+                if (!id) return;
+                var a = alerts.find(function(x) { return x.id === id; });
+                var ok = await TaskSupabase.setNotifAlertEnabled(id, e.target.checked);
+                if (ok) { a.enabled = e.target.checked; showToast(e.target.checked ? 'Alert on' : 'Alert off', 'success'); }
+                else { e.target.checked = !e.target.checked; showToast('Could not update the alert', 'error'); }
+            });
+
+            form.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                var name = $('ea-name').value.trim();
+                var days = getDays();
+                if (!name) return showError('Give the alert a name.');
+                if (!$('ea-time').value) return showError('Pick a time.');
+                if (!days) return showError('Pick at least one day.');
+                if (!editingId && alerts.length >= MAX_ALERTS) return showError('You can have up to ' + MAX_ALERTS + ' alerts. Delete one first.');
+                var existing = alerts.find(function(a) { return a.id === editingId; });
+                var payload = {
+                    name: name.slice(0, 40), kind: $('ea-kind').value, send_time: $('ea-time').value, days: days,
+                    tz: (Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'),
+                    subject: $('ea-subject').value.trim(), message: $('ea-message').value.trim(),
+                    enabled: existing ? existing.enabled : true
+                };
+                if (editingId) payload.id = editingId;
+                try {
+                    await TaskSupabase.saveNotifAlert(TaskAPI.getCurrentUser().id, payload);
+                    close();
+                    await self.refreshNotifAlerts();
+                    SoundFX.play('pop');
+                    showToast('Alert saved', 'success');
+                } catch (err) {
+                    showError('Could not save. Run the notification alerts SQL in Supabase first. (' + err.message + ')');
+                }
+            });
+
+            $('btn-delete-notif-alert').addEventListener('click', async function() {
+                if (!editingId || !confirm('Delete this alert?')) return;
+                if (await TaskSupabase.deleteNotifAlert(editingId)) {
+                    close();
+                    await self.refreshNotifAlerts();
+                    showToast('Alert deleted', 'success');
+                } else showError('Could not delete the alert.');
+            });
+
+            $('btn-test-notif-alert').addEventListener('click', async function() {
+                var btn = this;
+                btn.disabled = true;
+                showError('');
+                try {
+                    await TaskSupabase.sendTestNotifAlert(editingId);
+                    showToast('Test notification sent to your devices', 'success');
+                } catch (err) {
+                    showError('Test failed: ' + err.message);
+                } finally { btn.disabled = false; }
+            });
+
+            var settingsBtn = $('btn-open-settings');
+            if (settingsBtn) settingsBtn.addEventListener('click', function() { self.refreshNotifAlerts(); });
+            render();
         },
 
         // ---- Categories: sidebar, pickers, manager dialog, cloud sync ----

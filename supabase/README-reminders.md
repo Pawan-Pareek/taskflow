@@ -53,3 +53,25 @@ It returns `{"due":N,"sent":M}`. Logs: Supabase dashboard -> Edge Functions -> s
 - One-time reminders only. Delivery is within about a minute, not to the second.
 - Needs Supabase cloud sync. In local-only mode, reminders show only while the app is open.
 - A reminder fires once. Changing the time on a task re-arms it. Completed tasks are skipped.
+
+# Notification alerts
+
+Users create their own recurring notifications in **Settings -> Notification alerts** (up to 5): a name,
+what to send (a reminder to add tasks, or a list of the tasks still open today), a time, the days, and an
+optional title and message. "Morning nudge" and "Night summary" are one-tap starting points.
+They arrive as the same push notifications as task reminders, on every device that tapped
+**Enable notifications**. A cron job runs every minute and sends each alert once a day at its local time
+(the time zone of the device that saved it). A late run still sends within 60 minutes of the set time,
+then skips that day. If no device is registered yet, the alert waits instead of being lost.
+
+## One-time setup
+
+1. Run `supabase/setup-reminders.sql` again (sections 2d and 4 create the `notification_alerts` table and the cron job).
+2. Deploy the function. It uses the VAPID secrets you already set for `send-reminders`:
+
+```
+supabase functions deploy send-notification-alerts --use-api
+```
+
+Use **Send test** in the alert editor to check it. Logs: Supabase dashboard -> Edge Functions ->
+send-notification-alerts -> Logs.

@@ -351,6 +351,56 @@
             return true;
         },
 
+        // Notification alerts the user manages in Settings (sent by the send-notification-alerts Edge Function)
+        listNotifAlerts: async function(userId) {
+            var c = this.getClient();
+            if (!c || !userId) return null;
+            var res = await c.from('notification_alerts').select('*').eq('user_id', userId).order('send_time', { ascending: true });
+            if (res.error) {
+                console.warn('Supabase listNotifAlerts warning (run supabase/setup-reminders.sql):', res.error);
+                return null;
+            }
+            return res.data || [];
+        },
+
+        saveNotifAlert: async function(userId, alert) {
+            var c = this.getClient();
+            if (!c || !userId) throw new Error('Cloud sync is not connected');
+            var row = Object.assign({}, alert, { user_id: userId });
+            if (!row.id) delete row.id;
+            // A changed schedule should be allowed to fire again today
+            row.last_sent_on = null;
+            var res = await c.from('notification_alerts').upsert(row).select().single();
+            if (res.error) throw new Error(res.error.message);
+            return res.data;
+        },
+
+        setNotifAlertEnabled: async function(id, enabled) {
+            var c = this.getClient();
+            if (!c) return false;
+            var res = await c.from('notification_alerts').update({ enabled: enabled }).eq('id', id);
+            return !res.error;
+        },
+
+        deleteNotifAlert: async function(id) {
+            var c = this.getClient();
+            if (!c) return false;
+            var res = await c.from('notification_alerts').delete().eq('id', id);
+            return !res.error;
+        },
+
+        sendTestNotifAlert: async function(id) {
+            var c = this.getClient();
+            if (!c) throw new Error('Cloud sync is not connected');
+            var res = await c.functions.invoke('send-notification-alerts', { body: { test: id } });
+            if (res.error) {
+                var msg = res.error.message;
+                try { var j = await res.error.context.json(); if (j && j.error) msg = j.error; } catch (e) {}
+                throw new Error(msg);
+            }
+            return true;
+        },
+
         subscribeToSettings: function(userId, onUpdate) {
             var c = this.getClient();
             if (!c || !userId) return;
