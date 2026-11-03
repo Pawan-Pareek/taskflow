@@ -178,7 +178,7 @@
                     <div class="date-filter-container">
                         <label class="field-cap" for="date-filter-input">Search tasks by date</label>
                         <div class="field-row">
-                            <input type="date" id="date-filter-input" class="quick-date-picker" data-placeholder="Any date" title="Show tasks and goals for this date">
+                            <input type="date" id="date-filter-input" class="quick-date-picker" data-placeholder="Search by date" data-label="Date" style="--lbl-w:2.9em" title="Show tasks and goals for this date">
                             <button type="button" id="btn-clear-date-filter" class="btn-clear-date" title="Clear date filter" aria-label="Clear date filter">
                                 <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
                             </button>
@@ -232,7 +232,7 @@
                             <select id="quick-category-select" class="quick-pill-select" title="Category" aria-label="Category"></select>
                             <div class="field-stack" id="quick-due-field">
                                 <label class="field-cap" for="quick-due-date">Set task for a date</label>
-                                <input type="date" id="quick-due-date" class="quick-date-picker" title="Date this task is for">
+                                <input type="date" id="quick-due-date" class="quick-date-picker" data-placeholder="Set task for a date" data-label="Task date" style="--lbl-w:5.4em" title="Date this task is for">
                             </div>
                             <select id="quick-repeat-select" class="quick-pill-select" title="Repeat" aria-label="Repeat">
                                 <option value="" selected>Does not repeat</option>
@@ -243,7 +243,7 @@
                             </select>
                             <div class="field-stack" id="quick-remind-field">
                                 <label class="field-cap" for="quick-remind-at">Set reminder for this task</label>
-                                <input type="datetime-local" id="quick-remind-at" class="quick-date-picker" data-placeholder="Pick date and time" title="Pick the date and time to be reminded (optional)">
+                                <input type="datetime-local" id="quick-remind-at" class="quick-date-picker" data-placeholder="Set reminder for this task" data-label="Remind" style="--lbl-w:4.2em" title="Pick the date and time to be reminded (optional)">
                             </div>
                         </div>
 

@@ -280,7 +280,7 @@ input, textarea { caret-color: var(--accent); }
 .date-filter-container, .sort-container { display: flex; flex-direction: column; gap: 4px; }
 .field-row { display: flex; align-items: center; gap: 6px; }
 .field-stack { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.field-cap { font-size: 0.75rem; font-weight: 500; color: var(--muted); line-height: 1.2; }
+.field-cap { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .view-tools { align-items: flex-end; }
 .quick-options-left { align-items: flex-end; }
 .btn-clear-date { width: 28px; height: 28px; border-radius: var(--radius-sm); color: var(--muted); display: inline-flex; align-items: center; justify-content: center; }
@@ -519,8 +519,11 @@ input, textarea { caret-color: var(--accent); }
     .quick-options-left > * { width: 100%; min-width: 0; }
     .quick-options-left .quick-date-picker { padding: 0 8px; font-size: 0.9375rem; }
     .quick-options-left { align-items: end; }
-    .quick-options-left #quick-remind-field, .quick-options-left #quick-repeat-select { grid-column: 1 / -1; }
-    .quick-options-left:has(#quick-due-field.hidden) #quick-category-select { grid-column: 1 / -1; }
+    .quick-options-left #quick-category-select { order: 3; }
+    .quick-options-left #quick-repeat-select { order: 4; }
+    .quick-options-left #quick-due-field { order: 5; grid-column: 1 / -1; }
+    .quick-options-left #quick-remind-field { order: 6; grid-column: 1 / -1; }
+    .quick-options-left:has(#quick-repeat-select.hidden) #quick-category-select { grid-column: 1 / -1; }
     .field-stack .quick-date-picker { width: 100%; }
 
     /* Task rows: tapping the task opens the editor, so the pencil is dropped to give titles room */
@@ -582,6 +585,16 @@ input[type="date"].is-empty:not(:focus)::-webkit-datetime-edit, input[type="date
 input[type="date"].is-empty:not(:focus)::before, input[type="datetime-local"].is-empty:not(:focus)::before {
     content: attr(data-placeholder); position: absolute; left: 10px; right: 40px; top: 50%; transform: translateY(-50%);
     color: var(--muted); font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none;
+}
+/* A short label sits inside the field, like the text in the dropdowns: "Task date  03-11-2026" */
+input[data-label], input.quick-date-picker[data-label] { padding-left: calc(10px + var(--lbl-w, 4em)); }
+input[data-label]:not(.is-empty)::before, input[data-label].is-empty:focus::before {
+    content: attr(data-label); position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+    color: var(--muted); font-size: inherit; pointer-events: none;
+}
+@media (min-width: 769px) {
+    #quick-remind-at { min-width: 260px; }
+    .view-tools #date-filter-input { min-width: 200px; }
 }
 @supports (-webkit-touch-callout: none) {
     /* iOS: centre the value vertically (it sticks to the top otherwise) and left-align it */
