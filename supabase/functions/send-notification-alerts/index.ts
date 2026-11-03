@@ -118,10 +118,17 @@ async function push(userId: string, tag: string, n: { title: string; body: strin
   return sent;
 }
 
+// The app calls this from the browser (Send test), so it must answer the CORS preflight
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
 const json = (obj: unknown, status = 200) =>
-  new Response(JSON.stringify(obj), { status, headers: { "Content-Type": "application/json" } });
+  new Response(JSON.stringify(obj), { status, headers: { ...CORS, "Content-Type": "application/json" } });
 
 Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   let body: { test?: string } = {};
   try { body = await req.json(); } catch { /* cron sends {} */ }
 
