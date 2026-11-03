@@ -39,7 +39,7 @@ create table if not exists notification_alerts (
   id uuid primary key default gen_random_uuid(),
   user_id text not null,
   name text not null,
-  kind text not null default 'nudge',        -- 'nudge' = reminder to add tasks, 'remaining' = list of open tasks
+  kind text not null default 'nudge',        -- 'nudge' = reminder to add tasks, 'remaining' = list of open tasks, 'reminder' = just the user's own text
   send_time text not null default '08:00',   -- local time, HH:MM
   days text not null default '0,1,2,3,4,5,6', -- weekdays, 0 = Sunday
   tz text not null default 'UTC',            -- IANA time zone of the device that saved it

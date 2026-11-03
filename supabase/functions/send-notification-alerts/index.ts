@@ -60,6 +60,11 @@ function toMinutes(hhmm: string) {
 async function buildNotification(a: Alert, today: string) {
   const intro = (a.message ?? "").trim();
 
+  // "Just a reminder": only the title and message the user wrote
+  if (a.kind === "reminder") {
+    return { title: a.subject || a.name, body: intro || a.name };
+  }
+
   if (a.kind !== "remaining") {
     return {
       title: a.subject || "Plan your day",

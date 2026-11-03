@@ -969,7 +969,7 @@
                     row.innerHTML =
                         '<button type="button" class="notif-alert-main" data-id="' + a.id + '">' +
                         '<span class="notif-alert-name">' + App.escapeHtml(a.name) + '</span>' +
-                        '<span class="notif-alert-meta">' + timeLabel(a.send_time) + ' · ' + daysSummary(a.days) + ' · ' + (a.kind === 'remaining' ? 'Remaining tasks' : 'Add-tasks nudge') + '</span></button>' +
+                        '<span class="notif-alert-meta">' + timeLabel(a.send_time) + ' · ' + daysSummary(a.days) + ' · ' + ({ remaining: 'Remaining tasks', reminder: 'Just a reminder' }[a.kind] || 'Add-tasks nudge') + '</span></button>' +
                         '<label class="switch" title="' + (a.enabled ? 'On' : 'Off') + '"><input type="checkbox" data-toggle="' + a.id + '"' + (a.enabled ? ' checked' : '') + ' aria-label="Enable ' + App.escapeHtml(a.name) + '"><span class="switch-track"></span></label>';
                     listEl.appendChild(row);
                 });
