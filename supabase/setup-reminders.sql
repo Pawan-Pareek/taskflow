@@ -34,6 +34,9 @@ alter publication supabase_realtime add table user_settings;
 -- 2c) Per-user categories (names + colors). Safe to run even if 2b was already run.
 alter table user_settings add column if not exists categories jsonb;
 
+-- 2c2) Per-user custom to-do lists (up to 5 named lists)
+alter table user_settings add column if not exists custom_lists jsonb;
+
 -- 2d) Notification alerts the user creates and edits in Settings (morning nudge, night summary, ...)
 create table if not exists notification_alerts (
   id uuid primary key default gen_random_uuid(),

@@ -80,7 +80,7 @@ async function buildNotification(a: Alert, today: string) {
     .eq("completed", false)
     .limit(500);
   const open = (data ?? []).filter((t) =>
-    t.goal_type === "custom" || (t.due_date && t.due_date <= today)
+    (t.goal_type ?? "").startsWith("custom") || (t.due_date && t.due_date <= today)
   ).sort((x, y) => (x.due_date || "9999").localeCompare(y.due_date || "9999"));
 
   if (open.length === 0) {

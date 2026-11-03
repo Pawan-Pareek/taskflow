@@ -232,7 +232,8 @@
                     notes: row.notes || '',
                     priority: row.priority || 'medium',
                     category: row.category || 'personal',
-                    type: row.goal_type || undefined,
+                    type: /^custom/.test(row.goal_type || '') ? 'custom' : (row.goal_type || undefined),
+                    list: /^custom:/.test(row.goal_type || '') ? row.goal_type.slice(7) : undefined,
                     repeat: row.repeat_rule || '',
                     repeatDay: row.repeat_day || undefined,
                     remindAt: row.remind_at || '',
@@ -261,7 +262,8 @@
                     notes: t.notes || '',
                     priority: t.priority || 'medium',
                     category: t.category || 'personal',
-                    goal_type: t.type || 'daily',
+                    // lists other than the first are stored as custom:<id>, so no new column is needed
+                    goal_type: t.type === 'custom' && t.list && t.list !== 'custom' ? 'custom:' + t.list : (t.type || 'daily'),
                     repeat_rule: t.repeat || null,
                     repeat_day: t.repeat ? (t.repeatDay || null) : null,
                     remind_at: t.remindAt || null,
@@ -307,6 +309,36 @@
                 return null;
             }
             return res.data ? (res.data.custom_list_name || '') : null;
+        },
+
+        // The user's custom lists: { lists: [...], legacyName } or null when unavailable
+        getCustomLists: async function(userId) {
+            var c = this.getClient();
+            if (!c || !userId) return null;
+            var res = await c.from('user_settings').select('custom_lists, custom_list_name').eq('user_id', userId).maybeSingle();
+            if (res.error) {
+                // custom_lists column not added yet: fall back to the single saved name
+                var name = await this.getCustomListName(userId);
+                return name === null ? null : { lists: [], legacyName: name };
+            }
+            var d = res.data || {};
+            return { lists: Array.isArray(d.custom_lists) ? d.custom_lists : [], legacyName: d.custom_list_name || '' };
+        },
+
+        saveCustomLists: async function(userId, lists) {
+            var c = this.getClient();
+            if (!c || !userId || !lists || !lists.length) return false;
+            var res = await c.from('user_settings').upsert({
+                user_id: userId,
+                custom_lists: lists,
+                custom_list_name: lists[0].name, // older app versions only know the first list
+                updated_at: new Date().toISOString()
+            }, { onConflict: 'user_id' });
+            if (res.error) {
+                console.warn('Supabase saveCustomLists warning (run supabase/setup-reminders.sql):', res.error);
+                return this.saveCustomListName(userId, lists[0].name);
+            }
+            return true;
         },
 
         saveCustomListName: async function(userId, name) {

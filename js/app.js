@@ -67,6 +67,46 @@
         try { return localStorage.getItem(CUSTOM_NAME_KEY) || DEFAULT_CUSTOM_NAME; } catch (e) { return DEFAULT_CUSTOM_NAME; }
     }
 
+    // Up to five user-named lists. The first keeps the id "custom" so lists made before this existed still match.
+    var LISTS_KEY = 'taskflow_custom_lists';
+    var MAX_LISTS = 5;
+    function cleanLists(list) {
+        if (!Array.isArray(list)) return null;
+        var seen = {};
+        var out = [];
+        list.forEach(function(l) {
+            if (!l || typeof l.id !== 'string' || !/^[a-z0-9]+$/i.test(l.id) || seen[l.id]) return;
+            var name = String(l.name || '').trim().slice(0, 40);
+            if (!name) return;
+            seen[l.id] = true;
+            out.push({ id: l.id, name: name });
+        });
+        return out.length ? out.slice(0, MAX_LISTS) : null;
+    }
+    function loadLists() {
+        try {
+            var saved = cleanLists(JSON.parse(localStorage.getItem(LISTS_KEY)));
+            if (saved) return saved;
+        } catch (e) {}
+        return [{ id: 'custom', name: customName() }];
+    }
+    var customLists = loadLists();
+    var currentList = customLists[0].id;
+    function listOf(t) {
+        var id = t.list || 'custom';
+        return customLists.some(function(l) { return l.id === id; }) ? id : customLists[0].id;
+    }
+    function listName(id) {
+        var l = customLists.find(function(x) { return x.id === id; });
+        return (l || customLists[0]).name;
+    }
+    // The type pickers show one entry per list ("list:<id>"); a task stores type "custom" plus its list id
+    function parseTypeValue(v) {
+        return v && v.indexOf('list:') === 0 ? { type: 'custom', list: v.slice(5) } : { type: v || 'daily' };
+    }
+    function typeValueOf(t) { return isCustom(t) ? 'list:' + listOf(t) : (t.type || 'daily'); }
+    function isListValue(v) { return !!v && v.indexOf('list:') === 0; }
+
     // Reminder helpers: remindAt is stored as a UTC ISO string, edited as local time
     function toLocalInput(iso) {
         if (!iso) return '';
@@ -133,17 +173,21 @@
     // the type would otherwise be lost on every reload / realtime refresh.
     var TYPE_KEY = 'taskflow_goal_types';
     var REPEAT_KEY = 'taskflow_repeat_rules';
+    var LIST_KEY = 'taskflow_task_lists';
     var typesRestored = false;
     function saveTypeMap(list) {
         try {
             var map = {};
             var rmap = {};
+            var lmap = {};
             list.forEach(function(t) {
                 if (isGoal(t) || isCustom(t)) map[t.id] = t.type;
+                if (isCustom(t) && t.list && t.list !== 'custom') lmap[t.id] = t.list;
                 if (t.repeat) rmap[t.id] = { r: t.repeat, d: t.repeatDay || 0 };
             });
             localStorage.setItem(TYPE_KEY, JSON.stringify(map));
             localStorage.setItem(REPEAT_KEY, JSON.stringify(rmap));
+            localStorage.setItem(LIST_KEY, JSON.stringify(lmap));
         } catch (e) {}
     }
     function applyKnownTypes(list) {
@@ -151,7 +195,13 @@
         try { map = JSON.parse(localStorage.getItem(TYPE_KEY) || '{}'); } catch (e) {}
         var rmap = {};
         try { rmap = JSON.parse(localStorage.getItem(REPEAT_KEY) || '{}'); } catch (e) {}
+        var lmap = {};
+        try { lmap = JSON.parse(localStorage.getItem(LIST_KEY) || '{}'); } catch (e) {}
         list.forEach(function(t) {
+            if (t.type === 'custom' && (!t.list || t.list === 'custom') && lmap[t.id]) {
+                t.list = lmap[t.id];
+                typesRestored = true;
+            }
             if (!t.repeat && rmap[t.id]) {
                 t.repeat = rmap[t.id].r;
                 t.repeatDay = rmap[t.id].d || undefined;
@@ -173,7 +223,7 @@
     function taskSignature(list) {
         return JSON.stringify(list.slice().sort(function(a, b) { return a.id < b.id ? -1 : 1; }).map(function(t) {
             var r = t.remindAt ? new Date(t.remindAt).getTime() : 0;
-            return [t.id, t.title, t.notes || '', t.priority, t.category, t.type || 'daily', t.repeat || '', t.repeatDay || 0,
+            return [t.id, t.title, t.notes || '', t.priority, t.category, t.type || 'daily', t.list || 'custom', t.repeat || '', t.repeatDay || 0,
                 r, !!t.reminded, t.dueDate || '', !!t.completed, !!t.starred, t.subtasks || []];
         }));
     }
@@ -353,7 +403,7 @@
                     tasks = [];
                 }
                 this.render();
-                this.syncCustomName();
+                this.syncCustomLists();
                 this.syncCategories();
 
                 // Heal the cloud copy if goal types had to be restored from this device
@@ -448,13 +498,16 @@
                 // Anything the user leaves on its name label gets a sensible default
                 var category = (document.getElementById('quick-category-select') || {}).value || (currentCategory !== 'all' ? currentCategory : categoryList[0].id);
                 var remindAt = fromLocalInput((document.getElementById('quick-remind-at') || {}).value);
-                var type = (document.getElementById('quick-type-select') || {}).value || 'daily';
+                var typeChoice = parseTypeValue((document.getElementById('quick-type-select') || {}).value);
+                var type = typeChoice.type;
+                var list = typeChoice.list;
                 var dueDate = (document.getElementById('quick-due-date') || {}).value || self.getTodayStr();
                 var repeatSelect = document.getElementById('quick-repeat-select');
                 var repeat = type === 'daily' && repeatSelect && repeatSelect.value !== 'none' ? repeatSelect.value : '';
 
                 self.addTask({
                     type: type,
+                    list: list,
                     repeat: repeat,
                     remindAt: remindAt,
                     title: text,
@@ -476,7 +529,10 @@
                 showToast('Task added', 'success');
 
                 // Auto-switch view so the new task is visible
-                if (type !== 'daily' && currentFilter !== 'all' && currentFilter !== type) {
+                if (type === 'custom' && currentFilter !== 'all' && (currentFilter !== 'custom' || currentList !== listOf({ list: list }))) {
+                    currentList = listOf({ list: list });
+                    self.setFilter('custom');
+                } else if (type !== 'daily' && type !== 'custom' && currentFilter !== 'all' && currentFilter !== type) {
                     self.setFilter(type);
                 } else if (type === 'daily' && (currentFilter === 'weekly' || currentFilter === 'monthly' || currentFilter === 'custom')) {
                     self.setFilter('today');
@@ -610,7 +666,9 @@
                         task.reminded = false;
                         task.remindDirty = true; // re-arm the reminder in the cloud
                     }
-                    task.type = document.getElementById('edit-task-type').value;
+                    var typeChoice = parseTypeValue(document.getElementById('edit-task-type').value);
+                    task.type = typeChoice.type;
+                    if (typeChoice.type === 'custom') task.list = typeChoice.list; else delete task.list;
                     var repeatVal = document.getElementById('edit-task-repeat').value;
                     task.dueDate = isCustom(task) ? '' : periodEnd(task.type, document.getElementById('edit-task-duedate').value || self.getTodayStr());
 
@@ -887,23 +945,64 @@
             });
         },
 
-        // Rename the custom list, and hide due-date inputs while it is the selected type
+        // Custom lists: add, rename, delete (up to five). Due-date inputs hide while a list is the selected type.
         setupCustomList: function() {
             var self = this;
-            var renameBtn = document.getElementById('btn-rename-custom');
-            if (renameBtn) {
-                renameBtn.addEventListener('click', function() {
-                    var next = prompt('Rename this list', customName());
-                    if (next === null) return;
-                    next = next.trim().slice(0, 40);
-                    next = next || DEFAULT_CUSTOM_NAME;
-                    self.setCustomName(next);
+            var nav = document.getElementById('custom-list-nav');
+            var addBtn = document.getElementById('btn-add-list');
+            if (addBtn) {
+                addBtn.addEventListener('click', function() {
+                    if (customLists.length >= MAX_LISTS) {
+                        showToast('You can have up to ' + MAX_LISTS + ' lists. Delete one to add another.', 'info');
+                        return;
+                    }
+                    var name = prompt('Name your new list');
+                    if (name === null) return;
+                    name = name.trim().slice(0, 40);
+                    if (!name) return;
+                    var id = 'l' + Date.now().toString(36);
+                    customLists.push({ id: id, name: name });
+                    self.commitLists();
+                    currentList = id;
+                    self.setFilter('custom');
                     SoundFX.play('pop');
-                    showToast('List renamed', 'success');
-                    // Save to the cloud so every device gets the new name (latest rename wins)
-                    var u = TaskAPI.getCurrentUser();
-                    if (u && window.TaskSupabase && TaskSupabase.isEnabled()) {
-                        TaskSupabase.saveCustomListName(u.id, next);
+                    self.closeDrawer();
+                });
+            }
+            if (nav) {
+                nav.addEventListener('click', function(e) {
+                    var rename = e.target.closest('[data-rename]');
+                    var del = e.target.closest('[data-delete]');
+                    var open = e.target.closest('[data-list]');
+                    if (rename) {
+                        var rid = rename.getAttribute('data-rename');
+                        var next = prompt('Rename this list', listName(rid));
+                        if (next === null) return;
+                        next = next.trim().slice(0, 40);
+                        if (!next) return;
+                        customLists.find(function(l) { return l.id === rid; }).name = next;
+                        self.commitLists();
+                        SoundFX.play('pop');
+                        showToast('List renamed', 'success');
+                    } else if (del) {
+                        var did = del.getAttribute('data-delete');
+                        if (customLists.length <= 1) { showToast('Keep at least one list', 'info'); return; }
+                        var inList = tasks.filter(function(t) { return isCustom(t) && listOf(t) === did; });
+                        var fallback = customLists.find(function(l) { return l.id !== did; });
+                        var msg = 'Delete "' + listName(did) + '"?' + (inList.length ? ' Its ' + inList.length + ' task' + (inList.length === 1 ? '' : 's') + ' will move to "' + fallback.name + '".' : '');
+                        if (!confirm(msg)) return;
+                        inList.forEach(function(t) { t.list = fallback.id; });
+                        customLists = customLists.filter(function(l) { return l.id !== did; });
+                        if (currentList === did) currentList = customLists[0].id;
+                        if (inList.length) self.persistTasks();
+                        self.commitLists();
+                        self.render();
+                        if (currentFilter === 'custom') self.setFilter('custom');
+                    } else if (open) {
+                        currentList = open.getAttribute('data-list');
+                        self.setFilter('custom');
+                        SoundFX.play('pop');
+                        self.closeDrawer();
                     }
                 });
             }
@@ -911,13 +1010,113 @@
             var editType = document.getElementById('edit-task-type');
             if (quickType) quickType.addEventListener('change', function() { self.syncDueDateInputs(); });
             if (editType) editType.addEventListener('change', function() { self.syncDueDateInputs(); });
-            this.applyCustomName();
+            this.applyCustomLists();
             this.syncDueDateInputs();
             ['input', 'change'].forEach(function(ev) {
                 document.addEventListener(ev, function(e) {
                     if (e.target && e.target.matches && e.target.matches('input[type="date"], input[type="datetime-local"]')) self.refreshDateInputs();
                 });
             });
+        },
+
+        // Save after a local change: this device now, then the cloud (latest edit wins)
+        commitLists: function() {
+            try { localStorage.setItem(LISTS_KEY, JSON.stringify(customLists)); } catch (e) {}
+            this.applyCustomLists();
+            this.updateViewTitle();
+            var u = TaskAPI.getCurrentUser();
+            if (u && window.TaskSupabase && TaskSupabase.isEnabled()) TaskSupabase.saveCustomLists(u.id, customLists);
+        },
+
+        // Apply lists that arrived from the cloud without writing them back
+        setListsFromCloud: function(list) {
+            var clean = cleanLists(list);
+            if (!clean || JSON.stringify(clean) === JSON.stringify(customLists)) return;
+            customLists = clean;
+            if (!customLists.some(function(l) { return l.id === currentList; })) currentList = customLists[0].id;
+            try { localStorage.setItem(LISTS_KEY, JSON.stringify(customLists)); } catch (e) {}
+            this.applyCustomLists();
+            this.updateViewTitle();
+            this.renderTaskList();
+        },
+
+        // Pull the lists from the cloud (or publish this device's), then keep listening for changes
+        syncCustomLists: async function() {
+            var u = TaskAPI.getCurrentUser();
+            if (!u || !window.TaskSupabase || !TaskSupabase.isEnabled()) return;
+            var cloud = await TaskSupabase.getCustomLists(u.id);
+            if (cloud === null) return; // table missing or offline: keep this device's lists
+            if (cloud.lists && cloud.lists.length) {
+                this.setListsFromCloud(cloud.lists);
+            } else if (cloud.legacyName && customLists.length === 1 && customLists[0].name === DEFAULT_CUSTOM_NAME) {
+                // Only the old single-list name exists in the cloud: it is the first list
+                customLists[0].name = cloud.legacyName;
+                this.commitLists();
+            } else if (JSON.stringify(customLists) !== JSON.stringify([{ id: 'custom', name: DEFAULT_CUSTOM_NAME }])) {
+                TaskSupabase.saveCustomLists(u.id, customLists);
+            }
+            if (!this._settingsSubscribed) {
+                this._settingsSubscribed = true;
+                TaskSupabase.subscribeToSettings(u.id, function(payload) {
+                    var row = payload && payload.new;
+                    if (!row) return;
+                    if (row.custom_lists) App.setListsFromCloud(row.custom_lists);
+                    else if (row.custom_list_name && row.custom_list_name !== customLists[0].name && customLists.length === 1) {
+                        customLists[0].name = row.custom_list_name;
+                        App.commitLists();
+                    }
+                    if (row.categories) App.setCategoriesFromCloud(row.categories);
+                });
+            }
+        },
+
+        // Sidebar rows and the two type pickers follow the lists
+        applyCustomLists: function() {
+            var nav = document.getElementById('custom-list-nav');
+            if (nav) {
+                nav.innerHTML = '';
+                var many = customLists.length > 1;
+                customLists.forEach(function(l) {
+                    var li = document.createElement('li');
+                    li.className = 'nav-custom-row';
+                    var active = currentFilter === 'custom' && currentCategory === 'all' && currentList === l.id;
+                    li.innerHTML =
+                        '<button type="button" class="nav-item-btn' + (active ? ' active' : '') + '" data-filter="custom" data-list="' + l.id + '" id="nav-filter-' + l.id + '">' +
+                        icon('list').replace('class="icon"', 'class="icon nav-icon"') +
+                        '<span class="nav-label" id="' + (l.id === 'custom' ? 'custom-list-label' : 'list-label-' + l.id) + '">' + App.escapeHtml(l.name) + '</span>' +
+                        '<span class="nav-badge-count" id="count-' + l.id + '">0</span></button>' +
+                        '<button type="button" class="icon-btn nav-rename-btn" data-rename="' + l.id + '" id="btn-rename-' + l.id + '" title="Rename this list" aria-label="Rename ' + App.escapeHtml(l.name) + '">' + icon('pencil') + '</button>' +
+                        (many ? '<button type="button" class="icon-btn nav-rename-btn nav-delete-btn" data-delete="' + l.id + '" title="Delete this list" aria-label="Delete ' + App.escapeHtml(l.name) + '">' + icon('trash') + '</button>' : '');
+                    nav.appendChild(li);
+                });
+            }
+            var addBtn = document.getElementById('btn-add-list');
+            if (addBtn) {
+                var full = customLists.length >= MAX_LISTS;
+                addBtn.classList.toggle('is-full', full);
+                addBtn.querySelector('span').textContent = full ? 'List limit reached (' + MAX_LISTS + ')' : 'New list';
+            }
+            [['quick-type-select', true], ['edit-task-type', false]].forEach(function(pair) {
+                var sel = document.getElementById(pair[0]);
+                if (!sel) return;
+                var prev = sel.value;
+                sel.innerHTML = '';
+                var add = function(value, text, flags) {
+                    var o = document.createElement('option');
+                    o.value = value; o.textContent = text;
+                    if (flags) { o.disabled = true; o.hidden = true; }
+                    sel.appendChild(o);
+                };
+                if (pair[1]) add('', 'Task type', true);
+                add('daily', 'Daily task');
+                add('weekly', 'Weekly goal');
+                add('monthly', 'Monthly goal');
+                customLists.forEach(function(l) { add('list:' + l.id, l.name); });
+                var exists = Array.prototype.some.call(sel.options, function(o) { return o.value === prev; });
+                sel.value = exists ? prev : (pair[1] ? '' : 'daily');
+            });
+            this.updateBadgeCounts();
+            this.syncDueDateInputs();
         },
 
         // ---- Notification alerts: user-made schedules, sent by the send-notification-alerts Edge Function ----
@@ -1259,50 +1458,13 @@
             else if (JSON.stringify(categoryList) !== JSON.stringify(DEFAULT_CATEGORIES)) TaskSupabase.saveCategories(u.id, categoryList);
         },
 
-        setCustomName: function(name) {
-            try { localStorage.setItem(CUSTOM_NAME_KEY, name); } catch (e) {}
-            this.applyCustomName();
-            this.updateViewTitle();
-        },
-
-        // Pull the shared list name from the cloud and overwrite the local copy
-        syncCustomName: async function() {
-            var u = TaskAPI.getCurrentUser();
-            if (!u || !window.TaskSupabase || !TaskSupabase.isEnabled()) return;
-            var cloud = await TaskSupabase.getCustomListName(u.id);
-            if (cloud === null) return; // table missing or offline: keep the local name
-            if (cloud) {
-                if (cloud !== customName()) this.setCustomName(cloud);
-            } else if (customName() !== DEFAULT_CUSTOM_NAME) {
-                // Nothing in the cloud yet: publish this device's existing name
-                TaskSupabase.saveCustomListName(u.id, customName());
-            }
-            if (!this._settingsSubscribed) {
-                this._settingsSubscribed = true;
-                TaskSupabase.subscribeToSettings(u.id, function(payload) {
-                    var row = payload && payload.new;
-                    if (row && row.custom_list_name && row.custom_list_name !== customName()) {
-                        App.setCustomName(row.custom_list_name);
-                    }
-                    if (row && row.categories) App.setCategoriesFromCloud(row.categories);
-                });
-            }
-        },
-
-        applyCustomName: function() {
-            var name = customName();
-            var label = document.getElementById('custom-list-label');
-            if (label) label.textContent = name;
-            document.querySelectorAll('option[value="custom"]').forEach(function(o) { o.textContent = name; });
-        },
-
         syncDueDateInputs: function() {
             var quickType = document.getElementById('quick-type-select');
             var editType = document.getElementById('edit-task-type');
             var quickDate = document.getElementById('quick-due-date');
             var editGroup = document.getElementById('edit-duedate-group');
-            if (quickDate && quickType) (quickDate.closest('.field-stack') || quickDate).classList.toggle('hidden', quickType.value === 'custom');
-            if (editGroup && editType) editGroup.classList.toggle('hidden', editType.value === 'custom');
+            if (quickDate && quickType) (quickDate.closest('.field-stack') || quickDate).classList.toggle('hidden', isListValue(quickType.value));
+            if (editGroup && editType) editGroup.classList.toggle('hidden', isListValue(editType.value));
             var quickRepeat = document.getElementById('quick-repeat-select');
             var editRepeat = document.getElementById('edit-repeat-group');
             if (quickRepeat && quickType) quickRepeat.classList.toggle('hidden', (quickType.value || 'daily') !== 'daily');
@@ -1470,13 +1632,13 @@
             currentCategory = 'all';
 
             // Keep the quick-add type in sync with the view the user is in
-            var typeByView = { weekly: 'weekly', monthly: 'monthly', custom: 'custom', today: 'daily', upcoming: 'daily' };
+            var typeByView = { weekly: 'weekly', monthly: 'monthly', custom: 'list:' + currentList, today: 'daily', upcoming: 'daily' };
             var typeSelect = document.getElementById('quick-type-select');
             if (typeSelect && typeByView[filter]) typeSelect.value = typeByView[filter];
             this.syncDueDateInputs();
 
             document.querySelectorAll('[data-filter]').forEach(function(el) {
-                if (el.getAttribute('data-filter') === filter) {
+                if (el.getAttribute('data-filter') === filter && (filter !== 'custom' || el.getAttribute('data-list') === currentList)) {
                     el.classList.add('active');
                 } else {
                     el.classList.remove('active');
@@ -1521,7 +1683,7 @@
                     upcoming: 'Upcoming',
                     weekly: 'Weekly goals',
                     monthly: 'Monthly goals',
-                    custom: customName(),
+                    custom: listName(currentList),
                     starred: 'Starred',
                     completed: 'Completed'
                 };
@@ -1581,6 +1743,7 @@
                 createdAt: new Date().toISOString()
             };
 
+            if (type === 'custom') newTask.list = listOf({ list: data.list });
             if (newTask.repeat) newTask.repeatDay = parseDate(newTask.dueDate).getDate();
             tasks.unshift(newTask);
             this.persistTasks();
@@ -1688,7 +1851,7 @@
             document.getElementById('edit-task-priority').value = task.priority || 'medium';
             document.getElementById('edit-task-category').value = categoryOf(task.category).id;
             document.getElementById('edit-task-remind').value = toLocalInput(task.remindAt);
-            document.getElementById('edit-task-type').value = task.type || 'daily';
+            document.getElementById('edit-task-type').value = typeValueOf(task);
             document.getElementById('edit-task-duedate').value = task.dueDate || this.getTodayStr();
             document.getElementById('edit-task-repeat').value = task.repeat || '';
             this.syncDueDateInputs();
@@ -1776,7 +1939,7 @@
                         return t.type === currentFilter && goalInPeriod(t, selectedDate || todayStr, todayStr);
                     }
                     if (currentFilter === 'custom') {
-                        return isCustom(t);
+                        return isCustom(t) && listOf(t) === currentList;
                     }
                     if (currentFilter === 'today') {
                         if (selectedDate) return isDated(t);
@@ -1839,13 +2002,15 @@
                 all: tasks.filter(t => !t.completed).length,
                 today: tasks.filter(t => isDated(t) && !t.completed && t.dueDate <= todayStr).length,
                 upcoming: tasks.filter(t => isDated(t) && !t.completed && t.dueDate > todayStr).length,
-                custom: tasks.filter(t => isCustom(t) && !t.completed).length,
                 weekly: tasks.filter(t => t.type === 'weekly' && !t.completed && goalInPeriod(t, todayStr, todayStr)).length,
                 monthly: tasks.filter(t => t.type === 'monthly' && !t.completed && goalInPeriod(t, todayStr, todayStr)).length,
                 starred: tasks.filter(t => t.starred && !t.completed).length,
                 completed: tasks.filter(t => t.completed).length
             };
 
+            customLists.forEach(function(l) {
+                counts[l.id] = tasks.filter(function(t) { return isCustom(t) && !t.completed && listOf(t) === l.id; }).length;
+            });
             for (var key in counts) {
                 var el = document.getElementById('count-' + key);
                 if (el) el.textContent = counts[key];
