@@ -465,51 +465,6 @@
         </div>
     </div>
 
-    <!-- Notification alert editor -->
-    <div id="notif-alert-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="notif-alert-heading">
-        <div class="modal-card">
-            <button type="button" id="btn-close-notif-alert" class="modal-close-btn" aria-label="Close"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button>
-            <h3 id="notif-alert-heading">Notification alert</h3>
-            <form id="notif-alert-form" novalidate>
-                <div class="form-group">
-                    <label for="ea-name">Name</label>
-                    <input type="text" id="ea-name" class="form-input" maxlength="40" placeholder="Morning nudge" required>
-                </div>
-                <div class="form-group">
-                    <label for="ea-kind">What to send</label>
-                    <select id="ea-kind" class="form-select">
-                        <option value="nudge">A reminder to add tasks</option>
-                        <option value="remaining">A list of my remaining tasks</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="ea-time">Time</label>
-                    <input type="time" id="ea-time" class="form-input" value="08:00" required>
-                </div>
-                <div class="form-group">
-                    <label id="ea-days-label">Repeat on</label>
-                    <div class="day-picker" role="group" aria-labelledby="ea-days-label" id="ea-days"></div>
-                </div>
-                <div class="form-group">
-                    <label for="ea-subject">Title <span class="label-hint">(optional)</span></label>
-                    <input type="text" id="ea-subject" class="form-input" maxlength="60" placeholder="Plan your day">
-                </div>
-                <div class="form-group">
-                    <label for="ea-message">Message <span class="label-hint">(optional)</span></label>
-                    <textarea id="ea-message" class="form-textarea" rows="3" maxlength="140" placeholder="Good morning! What are you getting done today?"></textarea>
-                </div>
-                <p id="ea-error" class="remind-hint ea-error hidden"></p>
-                <div class="modal-actions">
-                    <button type="button" id="btn-test-notif-alert" class="btn btn-secondary">Send test</button>
-                    <div class="modal-actions-right">
-                        <button type="button" id="btn-delete-notif-alert" class="btn btn-ghost btn-danger-text hidden">Delete</button>
-                        <button type="submit" class="btn btn-primary">Save</button>
-                    </div>
-                </div>
-            </form>
-        </div>
-    </div>
-
     <!-- Settings -->
     <div id="settings-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="settings-heading">
         <div class="modal-card">
@@ -566,6 +521,51 @@
                 </div>
                 <p class="section-desc">Your tasks are saved on this device and kept in sync between your phone and laptop while you are online.</p>
             </div>
+        </div>
+    </div>
+
+    <!-- Notification alert editor -->
+    <div id="notif-alert-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="notif-alert-heading">
+        <div class="modal-card">
+            <button type="button" id="btn-close-notif-alert" class="modal-close-btn" aria-label="Close"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+            <h3 id="notif-alert-heading">Notification alert</h3>
+            <form id="notif-alert-form" novalidate>
+                <div class="form-group">
+                    <label for="ea-name">Name</label>
+                    <input type="text" id="ea-name" class="form-input" maxlength="40" placeholder="Morning nudge" required>
+                </div>
+                <div class="form-group">
+                    <label for="ea-kind">What to send</label>
+                    <select id="ea-kind" class="form-select">
+                        <option value="nudge">A reminder to add tasks</option>
+                        <option value="remaining">A list of my remaining tasks</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="ea-time">Time</label>
+                    <input type="time" id="ea-time" class="form-input" value="08:00" required>
+                </div>
+                <div class="form-group">
+                    <label id="ea-days-label">Repeat on</label>
+                    <div class="day-picker" role="group" aria-labelledby="ea-days-label" id="ea-days"></div>
+                </div>
+                <div class="form-group">
+                    <label for="ea-subject">Title <span class="label-hint">(optional)</span></label>
+                    <input type="text" id="ea-subject" class="form-input" maxlength="60" placeholder="Plan your day">
+                </div>
+                <div class="form-group">
+                    <label for="ea-message">Message <span class="label-hint">(optional)</span></label>
+                    <textarea id="ea-message" class="form-textarea" rows="3" maxlength="140" placeholder="Good morning! What are you getting done today?"></textarea>
+                </div>
+                <p id="ea-error" class="remind-hint ea-error hidden"></p>
+                <div class="modal-actions">
+                    <button type="button" id="btn-test-notif-alert" class="btn btn-secondary">Send test</button>
+                    <div class="modal-actions-right">
+                        <button type="button" id="btn-delete-notif-alert" class="btn btn-ghost btn-danger-text hidden">Delete</button>
+                        <button type="submit" class="btn btn-primary">Save</button>
+                    </div>
+                </div>
+            </form>
         </div>
     </div>
 
