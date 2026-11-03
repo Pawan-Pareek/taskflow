@@ -217,25 +217,28 @@
                     </div>
                     <div class="quick-add-controls">
                         <div class="quick-options-left">
-                            <select id="quick-type-select" class="quick-pill-select" title="Task type" aria-label="Task type">
-                                <option value="daily" selected>Daily task</option>
+                            <select id="quick-type-select" class="quick-pill-select" title="Task type" aria-label="Task type" required>
+                                <option value="" disabled selected hidden>Task type</option>
+                                <option value="daily">Daily task</option>
                                 <option value="weekly">Weekly goal</option>
                                 <option value="monthly">Monthly goal</option>
                                 <option value="custom">My list</option>
                             </select>
-                            <select id="quick-priority-select" class="quick-pill-select" title="Priority" aria-label="Priority">
+                            <select id="quick-priority-select" class="quick-pill-select" title="Priority" aria-label="Priority" required>
+                                <option value="" disabled selected hidden>Priority</option>
                                 <option value="urgent">Urgent</option>
                                 <option value="high">High</option>
-                                <option value="medium" selected>Medium</option>
+                                <option value="medium">Medium</option>
                                 <option value="low">Low</option>
                             </select>
-                            <select id="quick-category-select" class="quick-pill-select" title="Category" aria-label="Category"></select>
+                            <select id="quick-category-select" class="quick-pill-select" title="Category" aria-label="Category" required></select>
                             <div class="field-stack" id="quick-due-field">
                                 <label class="field-cap" for="quick-due-date">Set task for a date</label>
                                 <input type="date" id="quick-due-date" class="quick-date-picker" data-placeholder="Set task for a date" data-label="Task date" style="--lbl-w:5.4em" title="Date this task is for">
                             </div>
-                            <select id="quick-repeat-select" class="quick-pill-select" title="Repeat" aria-label="Repeat">
-                                <option value="" selected>Does not repeat</option>
+                            <select id="quick-repeat-select" class="quick-pill-select" title="Repeat" aria-label="Repeat" required>
+                                <option value="" disabled selected hidden>Repeat</option>
+                                <option value="none">Does not repeat</option>
                                 <option value="daily">Every day</option>
                                 <option value="weekdays">Every weekday</option>
                                 <option value="weekly">Every week</option>

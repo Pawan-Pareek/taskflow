@@ -428,12 +428,13 @@
                 }
 
                 var priority = (document.getElementById('quick-priority-select') || {}).value || 'medium';
-                var category = (document.getElementById('quick-category-select') || {}).value || categoryList[0].id;
+                // Anything the user leaves on its name label gets a sensible default
+                var category = (document.getElementById('quick-category-select') || {}).value || (currentCategory !== 'all' ? currentCategory : categoryList[0].id);
                 var remindAt = fromLocalInput((document.getElementById('quick-remind-at') || {}).value);
                 var type = (document.getElementById('quick-type-select') || {}).value || 'daily';
                 var dueDate = (document.getElementById('quick-due-date') || {}).value || self.getTodayStr();
                 var repeatSelect = document.getElementById('quick-repeat-select');
-                var repeat = type === 'daily' && repeatSelect ? repeatSelect.value : '';
+                var repeat = type === 'daily' && repeatSelect && repeatSelect.value !== 'none' ? repeatSelect.value : '';
 
                 self.addTask({
                     type: type,
@@ -1195,13 +1196,18 @@
                 if (!sel) return;
                 var prev = sel.value;
                 sel.innerHTML = '';
+                if (id === 'quick-category-select') {
+                    var ph = document.createElement('option');
+                    ph.value = ''; ph.textContent = 'Category'; ph.disabled = true; ph.hidden = true;
+                    sel.appendChild(ph);
+                }
                 categoryList.forEach(function(c) {
                     var o = document.createElement('option');
                     o.value = c.id;
                     o.textContent = c.name;
                     sel.appendChild(o);
                 });
-                sel.value = categoryList.some(function(c) { return c.id === prev; }) ? prev : categoryList[0].id;
+                sel.value = categoryList.some(function(c) { return c.id === prev; }) ? prev : (id === 'quick-category-select' ? '' : categoryList[0].id);
             });
             this.updateViewTitle();
         },
@@ -1282,7 +1288,7 @@
             if (editGroup && editType) editGroup.classList.toggle('hidden', editType.value === 'custom');
             var quickRepeat = document.getElementById('quick-repeat-select');
             var editRepeat = document.getElementById('edit-repeat-group');
-            if (quickRepeat && quickType) quickRepeat.classList.toggle('hidden', quickType.value !== 'daily');
+            if (quickRepeat && quickType) quickRepeat.classList.toggle('hidden', (quickType.value || 'daily') !== 'daily');
             if (editRepeat && editType) editRepeat.classList.toggle('hidden', editType.value !== 'daily');
         },
 

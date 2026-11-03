@@ -295,6 +295,9 @@ input, textarea { caret-color: var(--accent); }
     transition: border-color 150ms var(--ease);
     max-width: 100%;
 }
+/* Still on its name label (Task type, Priority, ...): muted, like the date hints */
+.quick-pill-select:invalid { color: var(--muted); }
+.quick-pill-select option { color: var(--text); }
 .quick-pill-select:hover, .quick-date-picker:hover, .sort-select:hover { border-color: var(--border-strong); }
 .quick-pill-select:focus-visible, .quick-date-picker:focus-visible, .sort-select:focus-visible { outline-offset: 0; border-color: var(--accent); }
 
