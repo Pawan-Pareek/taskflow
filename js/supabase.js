@@ -324,6 +324,33 @@
             return true;
         },
 
+        // Category list (jsonb on the same user_settings row). null = unavailable, [] = none saved yet
+        getCategories: async function(userId) {
+            var c = this.getClient();
+            if (!c || !userId) return null;
+            var res = await c.from('user_settings').select('categories').eq('user_id', userId).maybeSingle();
+            if (res.error) {
+                console.warn('Supabase getCategories warning (run supabase/setup-reminders.sql):', res.error);
+                return null;
+            }
+            return res.data && Array.isArray(res.data.categories) ? res.data.categories : [];
+        },
+
+        saveCategories: async function(userId, categories) {
+            var c = this.getClient();
+            if (!c || !userId) return false;
+            var res = await c.from('user_settings').upsert({
+                user_id: userId,
+                categories: categories,
+                updated_at: new Date().toISOString()
+            }, { onConflict: 'user_id' });
+            if (res.error) {
+                console.warn('Supabase saveCategories warning (run supabase/setup-reminders.sql):', res.error);
+                return false;
+            }
+            return true;
+        },
+
         subscribeToSettings: function(userId, onUpdate) {
             var c = this.getClient();
             if (!c || !userId) return;

@@ -222,6 +222,15 @@ input, textarea { caret-color: var(--accent); }
 .nav-rename-btn { width: 30px; height: 30px; min-width: 30px; color: var(--muted); }
 .nav-rename-btn .icon { width: 15px; height: 15px; }
 .nav-rename-btn:hover { color: var(--text); }
+.nav-group-row { display: flex; align-items: center; justify-content: space-between; padding-right: 2px; }
+.nav-group-row .nav-rename-btn { margin: -6px 0; }
+.category-edit-list { display: flex; flex-direction: column; gap: 8px; margin: 14px 0 12px; max-height: 50vh; overflow-y: auto; }
+.category-edit-row { display: flex; align-items: center; gap: 8px; }
+.category-edit-row .category-name-input { flex: 1; min-width: 0; }
+.category-color-input { width: 40px; height: 40px; min-width: 40px; padding: 3px; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface); cursor: pointer; }
+.category-delete-btn { color: var(--muted); flex-shrink: 0; }
+.category-delete-btn:hover { color: var(--danger); background: var(--danger-soft); }
+.category-add-btn { width: 100%; }
 .nav-icon { display: inline-flex; width: 18px; height: 18px; }
 .nav-label { flex: 1; }
 .nav-badge-count { font-size: 0.8rem; font-weight: 500; color: var(--muted); min-width: 18px; text-align: right; }

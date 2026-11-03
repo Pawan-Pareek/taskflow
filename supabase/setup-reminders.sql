@@ -31,6 +31,9 @@ alter table user_settings enable row level security;
 create policy "Allow all operations on user_settings" on user_settings for all using (true) with check (true);
 alter publication supabase_realtime add table user_settings;
 
+-- 2c) Per-user categories (names + colors). Safe to run even if 2b was already run.
+alter table user_settings add column if not exists categories jsonb;
+
 -- 3) Run the send-reminders Edge Function every minute
 -- (deploy the function first; see supabase/README-reminders.md. The request carries the
 --  project public anon key, so the function keeps JWT verification on.)

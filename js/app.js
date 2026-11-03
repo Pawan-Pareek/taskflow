@@ -169,13 +169,53 @@
         return list;
     }
 
-    var CATEGORIES = {
-        personal: { name: 'Personal', color: '#7c5cd6' },
-        work: { name: 'Work', color: '#2f6fd6' },
-        shopping: { name: 'Shopping', color: '#1f9d68' },
-        health: { name: 'Health', color: '#d9890b' },
-        learning: { name: 'Learning', color: '#c8458a' }
-    };
+    // Categories are per user and editable. A task stores the category id, so renaming never
+    // detaches tasks. The list lives on this device and, when signed in, in the cloud.
+    var CATEGORIES_KEY = 'taskflow_categories';
+    var MAX_ADDED_CATEGORIES = 6; // categories the user adds, on top of the starting five
+    var CATEGORY_COLORS = ['#7c5cd6', '#2f6fd6', '#1f9d68', '#d9890b', '#c8458a', '#d6453d', '#0f9aa8', '#6b7280'];
+    var DEFAULT_CATEGORIES = [
+        { id: 'personal', name: 'Personal', color: '#7c5cd6' },
+        { id: 'work', name: 'Work', color: '#2f6fd6' },
+        { id: 'shopping', name: 'Shopping', color: '#1f9d68' },
+        { id: 'health', name: 'Health', color: '#d9890b' },
+        { id: 'learning', name: 'Learning', color: '#c8458a' }
+    ];
+
+    function cleanCategories(list) {
+        if (!Array.isArray(list)) return null;
+        var seen = {};
+        var out = [];
+        list.forEach(function(c) {
+            if (!c || typeof c.id !== 'string' || !c.id || seen[c.id]) return;
+            var name = String(c.name || '').trim().slice(0, 24);
+            if (!name) return;
+            seen[c.id] = true;
+            out.push({ id: c.id, name: name, color: /^#[0-9a-f]{6}$/i.test(c.color) ? c.color : CATEGORY_COLORS[0] });
+        });
+        return out.length ? out.slice(0, MAX_CATEGORIES) : null;
+    }
+
+    function loadCategories() {
+        try {
+            var saved = cleanCategories(JSON.parse(localStorage.getItem(CATEGORIES_KEY)));
+            if (saved) return saved;
+        } catch (e) {}
+        return DEFAULT_CATEGORIES.map(function(c) { return Object.assign({}, c); });
+    }
+
+    var MAX_CATEGORIES = DEFAULT_CATEGORIES.length + MAX_ADDED_CATEGORIES;
+    function addedCount(list) {
+        return list.filter(function(c) { return !DEFAULT_CATEGORIES.some(function(d) { return d.id === c.id; }); }).length;
+    }
+
+    var categoryList = loadCategories();
+
+    // Resolve a task's category; an id we do not know (deleted, or not synced yet) shows as the first one
+    function categoryOf(id) {
+        for (var i = 0; i < categoryList.length; i++) if (categoryList[i].id === id) return categoryList[i];
+        return categoryList[0];
+    }
 
     var PRIORITY_WEIGHTS = {
         urgent: 4,
@@ -207,6 +247,7 @@
             this.setupThemeToggle();
             this.setupSoundToggle();
             this.setupCustomList();
+            this.setupCategories();
 
             // Check server and update status indicator
             this.checkSyncStatus();
@@ -303,6 +344,7 @@
                 }
                 this.render();
                 this.syncCustomName();
+                this.syncCategories();
 
                 // Heal the cloud copy if goal types had to be restored from this device
                 if (typesRestored) {
@@ -356,16 +398,7 @@
                 });
             });
 
-            // Category filter clicks
-            document.querySelectorAll('[data-category]').forEach(function(el) {
-                el.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    var cat = this.getAttribute('data-category');
-                    self.setCategory(cat);
-                    SoundFX.play('pop');
-                    self.closeDrawer();
-                });
-            });
+            // Category filter buttons are built in applyCategories()
 
             // Default Due Date to today
             var dueDateInput = document.getElementById('quick-due-date');
@@ -394,7 +427,7 @@
                 }
 
                 var priority = (document.getElementById('quick-priority-select') || {}).value || 'medium';
-                var category = (document.getElementById('quick-category-select') || {}).value || 'personal';
+                var category = (document.getElementById('quick-category-select') || {}).value || categoryList[0].id;
                 var remindAt = fromLocalInput((document.getElementById('quick-remind-at') || {}).value);
                 var type = (document.getElementById('quick-type-select') || {}).value || 'daily';
                 var dueDate = (document.getElementById('quick-due-date') || {}).value || self.getTodayStr();
@@ -868,6 +901,167 @@
             });
         },
 
+        // ---- Categories: sidebar, pickers, manager dialog, cloud sync ----
+        setupCategories: function() {
+            var self = this;
+            var modal = document.getElementById('category-modal');
+            var list = document.getElementById('category-edit-list');
+            if (!modal || !list) return;
+            var open = function() { self.renderCategoryEditor(); modal.classList.remove('hidden'); SoundFX.play('pop'); };
+            var close = function() { modal.classList.add('hidden'); };
+            document.getElementById('btn-manage-categories').addEventListener('click', open);
+            document.getElementById('btn-close-categories').addEventListener('click', close);
+            document.getElementById('btn-done-categories').addEventListener('click', close);
+            modal.addEventListener('click', function(e) { if (e.target === modal) close(); });
+
+            document.getElementById('btn-add-category').addEventListener('click', function() {
+                if (addedCount(categoryList) >= MAX_ADDED_CATEGORIES) { showToast('You can add up to ' + MAX_ADDED_CATEGORIES + ' categories of your own. Delete one to add another.', 'info'); return; }
+                var used = categoryList.map(function(c) { return c.color; });
+                var color = CATEGORY_COLORS.find(function(c) { return used.indexOf(c) < 0; }) || CATEGORY_COLORS[categoryList.length % CATEGORY_COLORS.length];
+                categoryList.push({ id: 'c' + Date.now().toString(36), name: 'New category', color: color });
+                self.commitCategories();
+                self.renderCategoryEditor();
+                var inputs = list.querySelectorAll('.category-name-input');
+                var last = inputs[inputs.length - 1];
+                if (last) { last.focus(); last.select(); }
+            });
+
+            list.addEventListener('change', function(e) {
+                var row = e.target.closest('.category-edit-row');
+                if (!row) return;
+                var cat = categoryList.find(function(c) { return c.id === row.getAttribute('data-id'); });
+                if (!cat) return;
+                if (e.target.classList.contains('category-name-input')) {
+                    var name = e.target.value.trim().slice(0, 24);
+                    if (!name) { e.target.value = cat.name; return; }
+                    cat.name = name;
+                } else if (e.target.classList.contains('category-color-input')) {
+                    cat.color = e.target.value;
+                }
+                self.commitCategories();
+            });
+
+            list.addEventListener('click', function(e) {
+                var btn = e.target.closest('.category-delete-btn');
+                if (!btn) return;
+                var id = btn.closest('.category-edit-row').getAttribute('data-id');
+                if (categoryList.length <= 1) { showToast('Keep at least one category', 'info'); return; }
+                var cat = categoryList.find(function(c) { return c.id === id; });
+                var inUse = tasks.filter(function(t) { return categoryOf(t.category).id === id; }).length;
+                var fallback = categoryList.find(function(c) { return c.id !== id; });
+                var msg = 'Delete "' + cat.name + '"?' + (inUse ? ' Its ' + inUse + ' task' + (inUse === 1 ? '' : 's') + ' will move to "' + fallback.name + '".' : '');
+                if (!confirm(msg)) return;
+                if (inUse) {
+                    tasks.forEach(function(t) { if (categoryOf(t.category).id === id) t.category = fallback.id; });
+                    self.persistTasks();
+                }
+                categoryList = categoryList.filter(function(c) { return c.id !== id; });
+                if (currentCategory === id) self.setCategory('all');
+                self.commitCategories();
+                self.renderCategoryEditor();
+                self.render();
+            });
+
+            this.applyCategories();
+        },
+
+        renderCategoryEditor: function() {
+            var list = document.getElementById('category-edit-list');
+            if (!list) return;
+            list.innerHTML = '';
+            categoryList.forEach(function(c) {
+                var row = document.createElement('div');
+                row.className = 'category-edit-row';
+                row.setAttribute('data-id', c.id);
+                row.innerHTML =
+                    '<input type="color" class="category-color-input" value="' + c.color + '" aria-label="Color">' +
+                    '<input type="text" class="form-input category-name-input" maxlength="24" value="' + App.escapeHtml(c.name) + '" aria-label="Category name">' +
+                    '<button type="button" class="icon-btn category-delete-btn" title="Delete category" aria-label="Delete ' + App.escapeHtml(c.name) + '">' + icon('trash') + '</button>';
+                list.appendChild(row);
+            });
+            var add = document.getElementById('btn-add-category');
+            if (add) {
+                var n = addedCount(categoryList);
+                add.disabled = n >= MAX_ADDED_CATEGORIES;
+                add.lastChild.textContent = 'Add category (' + n + '/' + MAX_ADDED_CATEGORIES + ' added)';
+            }
+        },
+
+        // Rebuild the sidebar list and both pickers from categoryList, keeping the current selections
+        applyCategories: function() {
+            var nav = document.getElementById('category-list');
+            if (nav) {
+                nav.innerHTML = '';
+                categoryList.forEach(function(c) {
+                    var li = document.createElement('li');
+                    var btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'nav-item-btn' + (currentCategory === c.id ? ' active' : '');
+                    btn.setAttribute('data-category', c.id);
+                    btn.id = 'cat-filter-' + c.id;
+                    var dot = document.createElement('span');
+                    dot.className = 'category-dot';
+                    dot.style.background = c.color;
+                    var label = document.createElement('span');
+                    label.className = 'nav-label';
+                    label.textContent = c.name;
+                    btn.appendChild(dot);
+                    btn.appendChild(label);
+                    btn.addEventListener('click', function() {
+                        App.setCategory(c.id);
+                        SoundFX.play('pop');
+                        App.closeDrawer();
+                    });
+                    li.appendChild(btn);
+                    nav.appendChild(li);
+                });
+            }
+            ['quick-category-select', 'edit-task-category'].forEach(function(id) {
+                var sel = document.getElementById(id);
+                if (!sel) return;
+                var prev = sel.value;
+                sel.innerHTML = '';
+                categoryList.forEach(function(c) {
+                    var o = document.createElement('option');
+                    o.value = c.id;
+                    o.textContent = c.name;
+                    sel.appendChild(o);
+                });
+                sel.value = categoryList.some(function(c) { return c.id === prev; }) ? prev : categoryList[0].id;
+            });
+            this.updateViewTitle();
+        },
+
+        // Save after a local change: this device now, then the cloud (latest edit wins)
+        commitCategories: function() {
+            try { localStorage.setItem(CATEGORIES_KEY, JSON.stringify(categoryList)); } catch (e) {}
+            this.applyCategories();
+            this.renderTaskList();
+            var u = TaskAPI.getCurrentUser();
+            if (u && window.TaskSupabase && TaskSupabase.isEnabled()) TaskSupabase.saveCategories(u.id, categoryList);
+        },
+
+        // Apply a list that arrived from the cloud without writing it back
+        setCategoriesFromCloud: function(list) {
+            var clean = cleanCategories(list);
+            if (!clean || JSON.stringify(clean) === JSON.stringify(categoryList)) return;
+            categoryList = clean;
+            try { localStorage.setItem(CATEGORIES_KEY, JSON.stringify(categoryList)); } catch (e) {}
+            if (currentCategory !== 'all' && !categoryList.some(function(c) { return c.id === currentCategory; })) currentCategory = 'all';
+            this.applyCategories();
+            this.renderCategoryEditor();
+            this.renderTaskList();
+        },
+
+        syncCategories: async function() {
+            var u = TaskAPI.getCurrentUser();
+            if (!u || !window.TaskSupabase || !TaskSupabase.isEnabled()) return;
+            var cloud = await TaskSupabase.getCategories(u.id);
+            if (cloud === null) return; // column missing or offline: keep this device's list
+            if (cloud.length) this.setCategoriesFromCloud(cloud);
+            else if (JSON.stringify(categoryList) !== JSON.stringify(DEFAULT_CATEGORIES)) TaskSupabase.saveCategories(u.id, categoryList);
+        },
+
         setCustomName: function(name) {
             try { localStorage.setItem(CUSTOM_NAME_KEY, name); } catch (e) {}
             this.applyCustomName();
@@ -893,6 +1087,7 @@
                     if (row && row.custom_list_name && row.custom_list_name !== customName()) {
                         App.setCustomName(row.custom_list_name);
                     }
+                    if (row && row.categories) App.setCategoriesFromCloud(row.categories);
                 });
             }
         },
@@ -1120,7 +1315,7 @@
             var subtitleEl = document.getElementById('current-view-date');
 
             if (currentCategory !== 'all') {
-                var catMeta = CATEGORIES[currentCategory];
+                var catMeta = categoryList.find(function(c) { return c.id === currentCategory; });
                 if (titleEl) titleEl.textContent = (catMeta ? catMeta.name : 'Category');
             } else {
                 var titles = {
@@ -1294,7 +1489,7 @@
             document.getElementById('edit-task-title').value = task.title;
             document.getElementById('edit-task-notes').value = task.notes || '';
             document.getElementById('edit-task-priority').value = task.priority || 'medium';
-            document.getElementById('edit-task-category').value = task.category || 'personal';
+            document.getElementById('edit-task-category').value = categoryOf(task.category).id;
             document.getElementById('edit-task-remind').value = toLocalInput(task.remindAt);
             document.getElementById('edit-task-type').value = task.type || 'daily';
             document.getElementById('edit-task-duedate').value = task.dueDate || this.getTodayStr();
@@ -1360,7 +1555,7 @@
 
             return tasks.filter(function(t) {
                 // Category filter
-                if (currentCategory !== 'all' && t.category !== currentCategory) {
+                if (currentCategory !== 'all' && categoryOf(t.category).id !== currentCategory) {
                     return false;
                 }
 
@@ -1502,7 +1697,7 @@
                 item.className = 'task-item' + (task.completed ? ' completed' : '') + ' priority-' + task.priority;
                 item.setAttribute('data-task-id', task.id);
 
-                var cat = CATEGORIES[task.category] || CATEGORIES.personal;
+                var cat = categoryOf(task.category);
                 var subtasks = task.subtasks || [];
                 var completedSubtasks = subtasks.filter(st => st.completed).length;
                 var remindBadge = task.remindAt
@@ -1530,7 +1725,7 @@
                         </div>
                         ${task.notes ? `<p class="task-notes-snippet">${App.escapeHtml(task.notes)}</p>` : ''}
                         <div class="task-meta-row">
-                            <span class="badge-category" style="--cat-color: ${cat.color}">${cat.name}</span>
+                            <span class="badge-category" style="--cat-color: ${cat.color}">${App.escapeHtml(cat.name)}</span>
                             <span class="badge-priority priority-${task.priority}">
                                 ${App.getPriorityLabel(task.priority)}
                             </span>

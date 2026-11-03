@@ -116,14 +116,10 @@
                         <svg class="icon" aria-hidden="true"><use href="#i-pencil"/></svg></button></li>
             </ul>
 
-            <div class="nav-group-title">Categories</div>
-            <ul class="nav-list">
-                <li><button type="button" class="nav-item-btn" data-category="personal" id="cat-filter-personal"><span class="category-dot" style="background:#7c5cd6"></span><span class="nav-label">Personal</span></button></li>
-                <li><button type="button" class="nav-item-btn" data-category="work" id="cat-filter-work"><span class="category-dot" style="background:#2f6fd6"></span><span class="nav-label">Work</span></button></li>
-                <li><button type="button" class="nav-item-btn" data-category="shopping" id="cat-filter-shopping"><span class="category-dot" style="background:#1f9d68"></span><span class="nav-label">Shopping</span></button></li>
-                <li><button type="button" class="nav-item-btn" data-category="health" id="cat-filter-health"><span class="category-dot" style="background:#d9890b"></span><span class="nav-label">Health</span></button></li>
-                <li><button type="button" class="nav-item-btn" data-category="learning" id="cat-filter-learning"><span class="category-dot" style="background:#c8458a"></span><span class="nav-label">Learning</span></button></li>
-            </ul>
+            <div class="nav-group-title nav-group-row"><span>Categories</span>
+                <button type="button" class="icon-btn nav-rename-btn" id="btn-manage-categories" title="Edit categories" aria-label="Edit categories">
+                    <svg class="icon" aria-hidden="true"><use href="#i-pencil"/></svg></button></div>
+            <ul class="nav-list" id="category-list"></ul>
 
             <div class="sidebar-footer">
                 <div class="daily-progress-card">
@@ -231,13 +227,7 @@
                                 <option value="medium" selected>Medium</option>
                                 <option value="low">Low</option>
                             </select>
-                            <select id="quick-category-select" class="quick-pill-select" title="Category" aria-label="Category">
-                                <option value="personal" selected>Personal</option>
-                                <option value="work">Work</option>
-                                <option value="shopping">Shopping</option>
-                                <option value="health">Health</option>
-                                <option value="learning">Learning</option>
-                            </select>
+                            <select id="quick-category-select" class="quick-pill-select" title="Category" aria-label="Category"></select>
                             <input type="date" id="quick-due-date" class="quick-date-picker" title="Due date" aria-label="Due date">
                             <select id="quick-repeat-select" class="quick-pill-select" title="Repeat" aria-label="Repeat">
                                 <option value="" selected>Does not repeat</option>
@@ -397,13 +387,7 @@
                     </div>
                     <div class="form-group">
                         <label for="edit-task-category">Category</label>
-                        <select id="edit-task-category" class="form-select">
-                            <option value="personal">Personal</option>
-                            <option value="work">Work</option>
-                            <option value="shopping">Shopping</option>
-                            <option value="health">Health</option>
-                            <option value="learning">Learning</option>
-                        </select>
+                        <select id="edit-task-category" class="form-select"></select>
                     </div>
                 </div>
                 <div class="form-row">
@@ -461,6 +445,23 @@
                     </div>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Categories -->
+    <div id="category-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="category-heading">
+        <div class="modal-card">
+            <button type="button" id="btn-close-categories" class="modal-close-btn" aria-label="Close"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+            <h3 id="category-heading">Categories</h3>
+            <p class="modal-lead">Rename, recolor, add or remove your own. Tasks keep their category when you rename it.</p>
+            <div id="category-edit-list" class="category-edit-list"></div>
+            <button type="button" id="btn-add-category" class="btn btn-secondary category-add-btn">
+                <svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>Add category
+            </button>
+            <div class="modal-actions">
+                <span></span>
+                <div class="modal-actions-right"><button type="button" id="btn-done-categories" class="btn btn-primary">Done</button></div>
+            </div>
         </div>
     </div>
 
