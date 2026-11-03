@@ -1544,63 +1544,57 @@
         },
 
         setupMobileGestures: function() {
-            // Touch gestures for mobile swipe
+            // Swipe a task left to delete it (with a confirmation). There is deliberately no swipe to
+            // complete: scrolling the list with a slightly slanted finger used to tick tasks off by accident.
+            // A task is completed only by tapping its circle.
             var taskList = document.getElementById('task-list');
             if (!taskList) return;
 
             var touchStartX = 0;
             var touchStartY = 0;
             var activeItem = null;
+            var horizontal = false; // true once the finger has clearly moved sideways, not down the list
+
+            function reset() {
+                if (activeItem) { activeItem.style.transform = ''; activeItem.style.borderColor = ''; }
+                activeItem = null;
+                horizontal = false;
+            }
 
             taskList.addEventListener('touchstart', function(e) {
                 var item = e.target.closest('.task-item');
-                if (!item) return;
+                if (!item || e.touches.length !== 1) return;
                 activeItem = item;
+                horizontal = false;
                 touchStartX = e.touches[0].clientX;
                 touchStartY = e.touches[0].clientY;
             }, { passive: true });
 
             taskList.addEventListener('touchmove', function(e) {
                 if (!activeItem) return;
-                var currentX = e.touches[0].clientX;
-                var currentY = e.touches[0].clientY;
-                var diffX = currentX - touchStartX;
-                var diffY = currentY - touchStartY;
+                var diffX = e.touches[0].clientX - touchStartX;
+                var diffY = e.touches[0].clientY - touchStartY;
 
-                // If scrolling vertically, cancel horizontal swipe
-                if (Math.abs(diffY) > Math.abs(diffX)) return;
-
-                if (diffX > 0 && diffX < 120) {
-                    // Swipe right hint (complete)
-                    activeItem.style.transform = 'translateX(' + diffX + 'px)';
-                    activeItem.style.borderColor = 'rgba(16, 185, 129, 0.4)';
-                } else if (diffX < 0 && diffX > -120) {
-                    // Swipe left hint (delete)
-                    activeItem.style.transform = 'translateX(' + diffX + 'px)';
+                // Any real vertical movement means the user is scrolling: drop the gesture
+                if (Math.abs(diffY) > 12 && Math.abs(diffY) > Math.abs(diffX) * 0.5) { reset(); return; }
+                if (diffX < -12 && Math.abs(diffX) > Math.abs(diffY) * 2) {
+                    horizontal = true;
+                    activeItem.style.transform = 'translateX(' + Math.max(diffX, -120) + 'px)';
                     activeItem.style.borderColor = 'rgba(239, 68, 68, 0.4)';
                 }
             }, { passive: true });
 
             taskList.addEventListener('touchend', function(e) {
                 if (!activeItem) return;
-                var item = activeItem;
-                var id = item.getAttribute('data-task-id');
+                var id = activeItem.getAttribute('data-task-id');
                 var diffX = e.changedTouches[0].clientX - touchStartX;
-
-                item.style.transform = '';
-                item.style.borderColor = '';
-                activeItem = null;
-
-                if (diffX > 80) {
-                    // Complete task
-                    App.toggleTaskComplete(id);
-                } else if (diffX < -80) {
-                    // Delete task
-                    if (confirm('Delete this task?')) {
-                        App.deleteTask(id);
-                    }
-                }
+                var diffY = e.changedTouches[0].clientY - touchStartY;
+                var swipedLeft = horizontal && diffX < -100 && Math.abs(diffY) < 30;
+                reset();
+                if (swipedLeft && confirm('Delete this task?')) App.deleteTask(id);
             });
+
+            taskList.addEventListener('touchcancel', reset, { passive: true });
         },
 
         openDrawer: function() {
