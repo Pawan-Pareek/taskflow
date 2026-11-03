@@ -559,6 +559,13 @@
             var quickAddInput = document.getElementById('quick-add-input');
             var quickAddBtn = document.getElementById('btn-quick-add-submit');
 
+            // The button stays disabled until there is something to add
+            function syncAddButton() {
+                if (quickAddBtn) quickAddBtn.disabled = !(quickAddInput && quickAddInput.value.trim());
+            }
+            if (quickAddInput) quickAddInput.addEventListener('input', syncAddButton);
+            syncAddButton();
+
             // Single Add Task handler — called by button click OR Enter key
             function doAddTask() {
                 var text = quickAddInput ? quickAddInput.value.trim() : '';
@@ -603,6 +610,7 @@
                 });
 
                 quickAddInput.value = '';
+                syncAddButton();
                 var remindInput = document.getElementById('quick-remind-at');
                 if (remindInput) remindInput.value = '';
                 if (repeatSelect) repeatSelect.value = ''; // don't carry a repeat onto the next task
