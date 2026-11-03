@@ -329,9 +329,53 @@ input, textarea { caret-color: var(--accent); }
 /* Task list */
 .task-list { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow-sm); }
 .task-list:empty { display: none; }
-.task-item { display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--border); transition: background-color 120ms var(--ease); }
+.task-item { position: relative; overflow: hidden; border-bottom: 1px solid var(--border); background: var(--surface); }
 .task-item:last-child { border-bottom: none; }
-.task-item:hover { background: var(--surface-2); }
+.task-row { position: relative; z-index: 1; display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; background: var(--surface); touch-action: pan-y; transition: background-color 120ms var(--ease), transform 220ms var(--ease); }
+.task-row.dragging { transition: none; }
+.task-item:hover > .task-row { background: var(--surface-2); }
+
+/* Swipe actions sit behind the row and show once it slides aside */
+.swipe-bg { position: absolute; inset: 0; display: flex; justify-content: space-between; visibility: hidden; }
+.task-item.swipe-left .swipe-bg, .task-item.swipe-right .swipe-bg { visibility: visible; }
+.swipe-act { width: 88px; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: #fff; font-size: 0.78rem; font-weight: 600; }
+.swipe-act .icon { width: 18px; height: 18px; }
+.swipe-done { background: #15803d; }
+.swipe-del { background: #c0281c; }
+.task-item.swipe-right .swipe-del, .task-item.swipe-left .swipe-done { visibility: hidden; }
+
+/* Checklist opened on the card */
+.task-checklist { padding: 0 14px 12px 48px; background: var(--surface); }
+.task-checklist .subtask-item-row { padding: 5px 0; }
+.subtask-delete-btn { width: 28px; height: 28px; border-radius: var(--radius-sm); color: var(--muted); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.subtask-delete-btn:hover { color: var(--danger); background: var(--danger-soft); }
+.subtask-delete-btn .icon { width: 14px; height: 14px; }
+.checklist-add { display: flex; gap: 8px; margin-top: 6px; }
+.checklist-add-input { flex: 1; min-width: 0; height: 36px; padding: 0 10px; font-size: 0.9rem; }
+.checklist-add-btn { min-height: 36px; padding: 0 14px; }
+.badge-subtasks.btn-expand { cursor: pointer; padding: 2px 6px; margin: -2px -6px; border-radius: var(--radius-sm); }
+.badge-subtasks.btn-expand:hover { background: var(--surface-2); color: var(--text); }
+.badge-subtasks .chev { display: inline-flex; transition: transform 160ms var(--ease); }
+.badge-subtasks .chev .icon { width: 12px; height: 12px; }
+.badge-subtasks.open .chev { transform: rotate(180deg); }
+
+/* Morning kickoff and "all done" cards at the top of Today */
+.day-card { padding: 16px 18px; border-bottom: 1px solid var(--border); background: var(--accent-soft); }
+.day-card h3 { font-size: 1.05rem; color: var(--text); }
+.day-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 2px; }
+.day-card-close { margin-right: -8px; color: var(--muted); }
+.day-card-sub { font-size: 0.88rem; color: var(--text-2); margin-bottom: 12px; }
+.day-card-label { display: block; font-size: 0.82rem; font-weight: 600; color: var(--text-2); margin-bottom: 6px; }
+.day-card-form { display: flex; gap: 8px; }
+.day-card-form .form-input { flex: 1; min-width: 0; background: var(--surface); }
+.day-card-start { margin-top: 8px; padding-left: 0; color: var(--accent-text); }
+.victory-card { display: flex; align-items: center; gap: 14px; }
+.victory-card .day-card-sub { margin: 2px 0 0; }
+.day-card-icon { display: inline-flex; color: var(--success); flex-shrink: 0; }
+.day-card-icon .icon { width: 30px; height: 30px; }
+.day-card-body { flex: 1; min-width: 0; }
+.day-card-btn { flex-shrink: 0; }
+@media (max-width: 480px) { .victory-card { flex-wrap: wrap; } .day-card-btn { width: 100%; } }
 
 .task-checkbox {
     width: 22px; height: 22px; margin-top: 1px; flex-shrink: 0;
@@ -485,9 +529,11 @@ input, textarea { caret-color: var(--accent); }
 
 /* Toasts */
 .toast-container { position: fixed; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; z-index: 10000; width: max-content; max-width: calc(100vw - 32px); pointer-events: none; }
-.toast-pill { padding: 10px 16px; border-radius: var(--radius-md); background: #1c212a; color: #f2f4f7; font-size: 0.9rem; box-shadow: var(--shadow-md); animation: toast-in 220ms var(--ease); }
+.toast-pill { display: flex; align-items: center; gap: 14px; pointer-events: auto; padding: 10px 16px; border-radius: var(--radius-md); background: #1c212a; color: #f2f4f7; font-size: 0.9rem; box-shadow: var(--shadow-md); animation: toast-in 220ms var(--ease); }
 .toast-pill.success { background: #14532d; }
 .toast-pill.fade-out { opacity: 0; transition: opacity 250ms ease; }
+.toast-action { font-weight: 700; font-size: 0.9rem; color: #8ab4ff; padding: 4px 6px; margin: -4px -6px -4px 0; border-radius: var(--radius-sm); }
+.toast-action:hover { background: rgba(255,255,255,0.1); }
 @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
 /* ==========================================================================
@@ -538,7 +584,9 @@ input, textarea { caret-color: var(--accent); }
     /* Task rows: tapping the task opens the editor, so the pencil is dropped to give titles room */
     .task-actions { opacity: 1; gap: 0; margin-right: -8px; }
     .task-actions .btn-edit { display: none; }
-    .task-item { gap: 10px; padding: 12px; }
+    .task-row { gap: 10px; padding: 12px; }
+    .task-checklist { padding-left: 44px; padding-right: 12px; }
+    .task-actions .btn-checklist { display: none; }
     .btn-action { width: 36px; height: 36px; }
 
     /* Selects: draw our own control so iOS matches the date inputs */
@@ -624,7 +672,7 @@ input[data-label]:not(.is-empty)::before, input[data-label].is-empty:focus::befo
 
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
-    .progress-fill, .nav-item-btn, .task-item { transition: none; }
+    .progress-fill, .nav-item-btn, .task-row { transition: none; }
 }
 
 /* Email alerts */

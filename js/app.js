@@ -284,7 +284,8 @@
     };
 
     // Helper: Toast Notifications
-    window.showToast = function(msg, type) {
+    // action (optional): { label: 'Undo', fn: function() {} } adds a button and keeps the toast up a little longer
+    window.showToast = function(msg, type, action) {
         var container = document.getElementById('toast-container');
         if (!container) return;
         var toast = document.createElement('div');
@@ -293,12 +294,81 @@
         var span = document.createElement('span');
         span.textContent = msg;
         toast.appendChild(span);
-        container.appendChild(toast);
-        setTimeout(function() {
+        var dismiss = function() {
             toast.classList.add('fade-out');
             setTimeout(function() { toast.remove(); }, 300);
-        }, 3200);
+        };
+        if (action && typeof action.fn === 'function') {
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'toast-action';
+            btn.textContent = action.label || 'Undo';
+            btn.addEventListener('click', function() {
+                if (btn.disabled) return;
+                btn.disabled = true;
+                action.fn();
+                dismiss();
+            });
+            toast.appendChild(btn);
+        }
+        container.appendChild(toast);
+        setTimeout(dismiss, action ? 6000 : 3200);
     };
+
+    // Light vibration on supported phones (Android Chrome and most Android browsers; iPhone Safari does not allow it)
+    var HAPTICS_KEY = 'taskflow_haptics';
+    var Haptics = {
+        on: function() { try { return localStorage.getItem(HAPTICS_KEY) !== 'off'; } catch (e) { return true; } },
+        set: function(v) { try { localStorage.setItem(HAPTICS_KEY, v ? 'on' : 'off'); } catch (e) {} },
+        vibrate: function(pattern) {
+            if (!this.on() || !navigator.vibrate) return;
+            try { navigator.vibrate(pattern); } catch (e) {}
+        },
+        tick: function() { this.vibrate(6); },
+        tap: function() { this.vibrate(10); },
+        success: function() { this.vibrate([12, 40, 18]); },
+        warn: function() { this.vibrate([20, 30, 20]); },
+        celebrate: function() { this.vibrate([15, 50, 15, 50, 35]); }
+    };
+
+    // Daily habit loop: morning kickoff, "all done" state and a streak of days with something completed.
+    // These live on this device (localStorage).
+    var KICKOFF_KEY = 'taskflow_kickoff_day';
+    var VICTORY_KEY = 'taskflow_victory_day';
+    var STREAK_KEY = 'taskflow_streak';
+    function storeGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+    function storeSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+    function dayBefore(dateStr) {
+        var d = parseDate(dateStr);
+        d.setDate(d.getDate() - 1);
+        return fmtDate(d);
+    }
+    function currentStreak(today) {
+        try {
+            var s = JSON.parse(storeGet(STREAK_KEY) || 'null');
+            if (s && (s.last === today || s.last === dayBefore(today))) return s.count || 0;
+        } catch (e) {}
+        return 0;
+    }
+    function bumpStreak(today) {
+        var s = null;
+        try { s = JSON.parse(storeGet(STREAK_KEY) || 'null'); } catch (e) {}
+        if (s && s.last === today) return;
+        var count = s && s.last === dayBefore(today) ? (s.count || 0) + 1 : 1;
+        storeSet(STREAK_KEY, JSON.stringify({ last: today, count: count }));
+    }
+    // Open dated tasks that are due today or earlier, and how many of today's are done
+    function dayStatus(today) {
+        var open = 0, doneToday = 0;
+        tasks.forEach(function(t) {
+            if (!isDated(t)) return;
+            if (!t.completed && t.dueDate && t.dueDate <= today) open++;
+            if (t.completed && (t.dueDate === today || (t.completedAt && fmtDate(new Date(t.completedAt)) === today))) doneToday++;
+        });
+        return { open: open, doneToday: doneToday };
+    }
+    var expandedTasks = {};   // task id -> its checklist is open on the card
+    var openSwipe = null;     // the task row currently slid open by a swipe
 
     var App = {
         init: async function() {
@@ -319,6 +389,7 @@
             this.setupCustomList();
             this.setupCategories();
             this.setupNotifAlerts();
+            this.setupHaptics();
 
             // Check server and update status indicator
             this.checkSyncStatus();
@@ -653,8 +724,10 @@
 
             if (deleteInEditBtn) {
                 deleteInEditBtn.addEventListener('click', function() {
-                    if (editingTaskId && confirm('Are you sure you want to delete this task?')) {
-                        self.deleteTask(editingTaskId);
+                    if (editingTaskId) {
+                        var doomed = editingTaskId;
+                        self.closeEditModal();
+                        self.deleteTask(doomed);
                         self.closeEditModal();
                     }
                 });
@@ -1130,6 +1203,16 @@
             this.syncDueDateInputs();
         },
 
+        setupHaptics: function() {
+            var box = document.getElementById('haptics-toggle');
+            if (!box) return;
+            box.checked = Haptics.on();
+            box.addEventListener('change', function() {
+                Haptics.set(box.checked);
+                if (box.checked) Haptics.success();
+            });
+        },
+
         // ---- Notification alerts: user-made schedules, sent by the send-notification-alerts Edge Function ----
         setupNotifAlerts: function() {
             var self = this;
@@ -1554,58 +1637,98 @@
             }
         },
 
+        // Swipe a task row sideways to reveal an action behind it: right shows Done, left shows Delete.
+        // The swipe itself never changes anything; you tap the revealed button (so a slanted scroll can't
+        // complete or delete a task), and deleting can be undone from the toast.
         setupMobileGestures: function() {
-            // Swipe a task left to delete it (with a confirmation). There is deliberately no swipe to
-            // complete: scrolling the list with a slightly slanted finger used to tick tasks off by accident.
-            // A task is completed only by tapping its circle.
             var taskList = document.getElementById('task-list');
             if (!taskList) return;
 
-            var touchStartX = 0;
-            var touchStartY = 0;
-            var activeItem = null;
-            var horizontal = false; // true once the finger has clearly moved sideways, not down the list
+            var OPEN = 88;           // how far the row slides to reveal its action
+            var startX = 0, startY = 0, base = 0, lastX = 0;
+            var item = null, row = null, horizontal = false, ticked = false;
 
-            function reset() {
-                if (activeItem) { activeItem.style.transform = ''; activeItem.style.borderColor = ''; }
-                activeItem = null;
-                horizontal = false;
+            function slide(r, x, animate) {
+                r.classList.toggle('dragging', !animate);
+                r.style.transform = x ? 'translateX(' + x + 'px)' : '';
             }
+            function closeOpen() {
+                if (!openSwipe) return;
+                var r = openSwipe.querySelector('.task-row');
+                if (r) slide(r, 0, true);
+                openSwipe.classList.remove('swipe-left', 'swipe-right');
+                openSwipe = null;
+            }
+            App.closeSwipe = closeOpen;
 
             taskList.addEventListener('touchstart', function(e) {
-                var item = e.target.closest('.task-item');
-                if (!item || e.touches.length !== 1) return;
-                activeItem = item;
+                var target = e.target.closest ? e.target.closest('.task-item') : null;
+                if (!target || e.touches.length !== 1 || e.target.closest('.swipe-act, .task-checklist')) {
+                    if (!target || !e.target.closest('.swipe-act')) closeOpen();
+                    item = row = null;
+                    return;
+                }
+                if (openSwipe && openSwipe !== target) closeOpen();
+                item = target;
+                row = item.querySelector('.task-row');
+                startX = lastX = e.touches[0].clientX;
+                startY = e.touches[0].clientY;
+                base = item === openSwipe ? (item.classList.contains('swipe-right') ? OPEN : -OPEN) : 0;
                 horizontal = false;
-                touchStartX = e.touches[0].clientX;
-                touchStartY = e.touches[0].clientY;
+                ticked = false;
             }, { passive: true });
 
             taskList.addEventListener('touchmove', function(e) {
-                if (!activeItem) return;
-                var diffX = e.touches[0].clientX - touchStartX;
-                var diffY = e.touches[0].clientY - touchStartY;
-
-                // Any real vertical movement means the user is scrolling: drop the gesture
-                if (Math.abs(diffY) > 12 && Math.abs(diffY) > Math.abs(diffX) * 0.5) { reset(); return; }
-                if (diffX < -12 && Math.abs(diffX) > Math.abs(diffY) * 2) {
-                    horizontal = true;
-                    activeItem.style.transform = 'translateX(' + Math.max(diffX, -120) + 'px)';
-                    activeItem.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+                if (!item || !row) return;
+                var dx = e.touches[0].clientX - startX;
+                var dy = e.touches[0].clientY - startY;
+                if (!horizontal) {
+                    // Real vertical movement means scrolling: leave the row alone
+                    if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx) * 0.6) { slide(row, base, true); item = row = null; return; }
+                    if (Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy) * 2) horizontal = true; else return;
                 }
+                var x = Math.max(-OPEN * 1.25, Math.min(OPEN * 1.25, base + dx));
+                lastX = x;
+                item.classList.toggle('swipe-right', x > 0);
+                item.classList.toggle('swipe-left', x < 0);
+                slide(row, x, false);
+                if (!ticked && Math.abs(x) >= OPEN * 0.6) { Haptics.tick(); ticked = true; }
             }, { passive: true });
 
             taskList.addEventListener('touchend', function(e) {
-                if (!activeItem) return;
-                var id = activeItem.getAttribute('data-task-id');
-                var diffX = e.changedTouches[0].clientX - touchStartX;
-                var diffY = e.changedTouches[0].clientY - touchStartY;
-                var swipedLeft = horizontal && diffX < -100 && Math.abs(diffY) < 30;
-                reset();
-                if (swipedLeft && confirm('Delete this task?')) App.deleteTask(id);
+                if (!item || !row) return;
+                var finished = item;
+                var r = row;
+                item = row = null;
+                if (!horizontal) return;
+                e.preventDefault(); // the drag must not also count as a tap on the task
+                if (Math.abs(lastX) >= OPEN * 0.55) {
+                    var dir = lastX > 0 ? 'swipe-right' : 'swipe-left';
+                    finished.classList.remove('swipe-left', 'swipe-right');
+                    finished.classList.add(dir);
+                    slide(r, lastX > 0 ? OPEN : -OPEN, true);
+                    openSwipe = finished;
+                } else {
+                    finished.classList.remove('swipe-left', 'swipe-right');
+                    slide(r, 0, true);
+                    if (openSwipe === finished) openSwipe = null;
+                }
             });
 
-            taskList.addEventListener('touchcancel', reset, { passive: true });
+            taskList.addEventListener('touchcancel', function() {
+                if (row) slide(row, base, true);
+                item = row = null;
+            }, { passive: true });
+
+            // A tap on a slid-open row just closes it
+            taskList.addEventListener('click', function(e) {
+                if (openSwipe && e.target.closest('.task-row') && e.target.closest('.task-item') === openSwipe) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    closeOpen();
+                }
+            }, true);
+            window.addEventListener('scroll', closeOpen, { passive: true });
         },
 
         openDrawer: function() {
@@ -1762,22 +1885,37 @@
             if (task.completed) {
                 task.completedAt = new Date().toISOString();
                 SoundFX.play('check');
+                Haptics.success();
+                var today = this.getTodayStr();
+                bumpStreak(today);
 
-                // Check if all today's tasks are finished
-                var todayTasks = tasks.filter(t => isDated(t) && t.dueDate === this.getTodayStr());
-                var allDone = todayTasks.length > 0 && todayTasks.every(t => t.completed);
+                var undo = { label: 'Undo', fn: function() { App.toggleTaskComplete(id); } };
+                var st = dayStatus(today);
+                var cleared = st.open === 0 && st.doneToday > 0;
 
                 if (isRecurring(task) && !task.spawnedId) {
                     var next = this.spawnNextOccurrence(task);
-                    showToast('Done. Next one: ' + shortDate(next.dueDate), 'success');
-                } else if (allDone) {
-                    showToast('All tasks for today are done', 'success');
-                } else {
-                    showToast('Task completed', 'success');
+                    st = dayStatus(today);
+                    cleared = st.open === 0 && st.doneToday > 0;
+                    showToast('Done. Next one: ' + shortDate(next.dueDate), 'success', undo);
+                } else if (!cleared) {
+                    showToast('Task completed', 'success', undo);
+                }
+
+                // Clearing the list for the first time today gets a small celebration
+                if (cleared && storeGet(VICTORY_KEY) !== today) {
+                    storeSet(VICTORY_KEY, today);
+                    Haptics.celebrate();
+                    SoundFX.play('fanfare');
+                    try { if (window.Confetti && !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) Confetti.burst(); } catch (e) {}
+                    showToast('All done for today. Nice work.', 'success', undo);
+                } else if (cleared && !isRecurring(task)) {
+                    showToast('Task completed', 'success', undo);
                 }
             } else {
                 delete task.completedAt;
                 SoundFX.play('uncheck');
+                Haptics.tap();
                 // Undoing a recurring task removes the copy that was added for it, if untouched
                 if (task.spawnedId) {
                     var copy = tasks.find(t => t.id === task.spawnedId);
@@ -1839,10 +1977,20 @@
         },
 
         deleteTask: function(id) {
+            var index = tasks.findIndex(t => t.id === id);
+            if (index < 0) return;
+            var removed = tasks[index];
             tasks = tasks.filter(t => t.id !== id);
             TaskAPI.deleteTodo(id);
             SoundFX.play('delete');
-            showToast('Task deleted', 'info');
+            Haptics.warn();
+            delete expandedTasks[id];
+            // No confirm dialog: deleting is instant and can be undone from the toast
+            showToast('Task deleted', 'info', { label: 'Undo', fn: function() {
+                tasks.splice(Math.min(index, tasks.length), 0, removed);
+                SoundFX.play('pop');
+                App.persistTasks();
+            } });
             this.persistTasks();
         },
 
@@ -2039,15 +2187,91 @@
             if (percentText) percentText.textContent = percentage + '%';
         },
 
+        // Cards at the top of the Today view: the morning kickoff, or the "all done" state
+        renderDayCards: function(container) {
+            var inTodayView = currentFilter === 'today' && currentCategory === 'all' && !searchQuery && !selectedDate;
+            if (!inTodayView) return 0;
+            var today = this.getTodayStr();
+            var st = dayStatus(today);
+            var el;
+
+            if (st.open === 0 && st.doneToday > 0) {
+                var streak = currentStreak(today);
+                el = document.createElement('div');
+                el.className = 'day-card victory-card';
+                el.innerHTML = '<div class="day-card-icon">' + icon('check-circle') + '</div>' +
+                    '<div class="day-card-body"><h3>All done for today</h3><p class="day-card-sub"></p></div>' +
+                    '<button type="button" class="btn btn-secondary day-card-btn" id="btn-plan-tomorrow">Plan tomorrow</button>';
+                el.querySelector('.day-card-sub').textContent = (streak >= 2 ? streak + '-day streak. ' : '') + 'Tomorrow starts fresh.';
+                el.querySelector('#btn-plan-tomorrow').addEventListener('click', function() {
+                    Haptics.tap();
+                    var tm = new Date();
+                    tm.setDate(tm.getDate() + 1);
+                    var typeSel = document.getElementById('quick-type-select');
+                    var dateIn = document.getElementById('quick-due-date');
+                    if (typeSel) { typeSel.value = 'daily'; App.syncDueDateInputs(); }
+                    if (dateIn) { dateIn.value = fmtDate(tm); App.refreshDateInputs(); }
+                    var input = document.getElementById('quick-add-input');
+                    if (input) { input.focus(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+                    showToast('New tasks you add now are set for tomorrow', 'info');
+                });
+                container.appendChild(el);
+                return 1;
+            }
+
+            if (new Date().getHours() < 12 && storeGet(KICKOFF_KEY) !== today) {
+                var user = TaskAPI.getCurrentUser() || {};
+                var first = ((user.name || user.username || '').trim().split(/\s+/)[0]) || '';
+                var overdue = tasks.filter(function(t) { return isDated(t) && !t.completed && t.dueDate && t.dueDate < today; }).length;
+                var due = tasks.filter(function(t) { return isDated(t) && !t.completed && t.dueDate === today; }).length;
+                var summary = due + overdue === 0
+                    ? 'A clean slate. Start with the one thing that matters most.'
+                    : 'You have ' + (due + overdue) + ' task' + (due + overdue === 1 ? '' : 's') + ' to do today' + (overdue ? ' (' + overdue + ' overdue)' : '') + '.';
+                el = document.createElement('div');
+                el.className = 'day-card kickoff-card';
+                el.innerHTML = '<div class="day-card-head"><h3 class="kickoff-greeting"></h3>' +
+                    '<button type="button" class="icon-btn day-card-close" aria-label="Skip planning today">' + icon('x') + '</button></div>' +
+                    '<p class="day-card-sub"></p>' +
+                    '<label class="day-card-label" for="kickoff-input">What is the one thing that matters most today?</label>' +
+                    '<div class="day-card-form"><input type="text" id="kickoff-input" class="form-input" maxlength="120" placeholder="e.g. Finish the proposal" autocomplete="off" enterkeyhint="done">' +
+                    '<button type="button" class="btn btn-primary" id="btn-kickoff-add">Add</button></div>' +
+                    '<button type="button" class="btn btn-ghost day-card-start" id="btn-kickoff-start">Start my day</button>';
+                el.querySelector('.kickoff-greeting').textContent = 'Good morning' + (first ? ', ' + first : '');
+                el.querySelector('.day-card-sub').textContent = summary;
+                var dismiss = function() { storeSet(KICKOFF_KEY, today); Haptics.tap(); SoundFX.play('pop'); App.renderTaskList(); };
+                el.querySelector('.day-card-close').addEventListener('click', dismiss);
+                el.querySelector('#btn-kickoff-start').addEventListener('click', dismiss);
+                var kInput = el.querySelector('#kickoff-input');
+                var addPriority = function() {
+                    var title = kInput.value.trim();
+                    if (!title) { kInput.focus(); return; }
+                    App.addTask({ type: 'daily', title: title, notes: '', priority: 'high', category: categoryList[0].id, dueDate: today, completed: false, starred: true, subtasks: [] });
+                    SoundFX.play('pop');
+                    Haptics.success();
+                    showToast('Added to today', 'success');
+                    setTimeout(function() { var i = document.getElementById('kickoff-input'); if (i) i.focus(); }, 0);
+                };
+                el.querySelector('#btn-kickoff-add').addEventListener('click', addPriority);
+                kInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); addPriority(); } });
+                container.appendChild(el);
+                return 1;
+            }
+            return 0;
+        },
+
         renderTaskList: function() {
             var container = document.getElementById('task-list');
             if (!container) return;
             container.innerHTML = '';
+            openSwipe = null; // the rows below are rebuilt, so any slid-open row is gone
 
             var filtered = this.filterTasks();
             var sorted = this.sortTasks(filtered);
 
+            var cards = this.renderDayCards(container);
+
             if (sorted.length === 0) {
+                if (cards > 0) return;
                 var emptyMsg = searchQuery ? 'No tasks found matching "' + this.escapeHtml(searchQuery) + '"' : 'Nothing to show in this view.';
                 container.innerHTML = `
                     <div class="empty-state-card">
@@ -2067,6 +2291,7 @@
                 var cat = categoryOf(task.category);
                 var subtasks = task.subtasks || [];
                 var completedSubtasks = subtasks.filter(st => st.completed).length;
+                var expanded = !!expandedTasks[task.id];
                 var remindBadge = task.remindAt
                     ? '<span class="badge-remind' + (task.reminded ? ' sent' : '') + '" title="' + (task.reminded ? 'Reminder sent' : 'Reminder set') + '">' + icon('bell') + remindLabel(task.remindAt) + '</span>'
                     : '';
@@ -2074,7 +2299,7 @@
                     ? '<span class="badge-repeat" title="Repeats automatically">' + icon('repeat') + REPEAT_LABELS[task.repeat] + '</span>'
                     : '';
                 var subtaskBadge = subtasks.length > 0
-                    ? `<span class="badge-subtasks">${icon('check')}${completedSubtasks}/${subtasks.length}</span>` 
+                    ? `<button type="button" class="badge-subtasks btn-expand${expanded ? ' open' : ''}" aria-expanded="${expanded ? 'true' : 'false'}" title="Show checklist">${icon('check')}${completedSubtasks}/${subtasks.length}<span class="chev">${icon('chevron-down')}</span></button>`
                     : '';
 
                 var dateBadge = App.formatDateBadge(task.dueDate, task.completed, task.type);
@@ -2083,6 +2308,11 @@
                 }
 
                 item.innerHTML = `
+                    <div class="swipe-bg">
+                        <button type="button" class="swipe-act swipe-done">${icon('check')}<span>${task.completed ? 'Reopen' : 'Done'}</span></button>
+                        <button type="button" class="swipe-act swipe-del">${icon('trash')}<span>Delete</span></button>
+                    </div>
+                    <div class="task-row">
                     <button type="button" class="task-checkbox" role="checkbox" aria-checked="${task.completed ? 'true' : 'false'}" aria-label="Mark &quot;${App.escapeHtml(task.title)}&quot; ${task.completed ? 'incomplete' : 'complete'}">
                         <span class="check-icon">${task.completed ? icon('check') : ''}</span>
                     </button>
@@ -2106,6 +2336,9 @@
                         <button type="button" class="btn-action btn-star ${task.starred ? 'active' : ''}" title="Star task" aria-label="${task.starred ? 'Unstar' : 'Star'} task" aria-pressed="${task.starred ? 'true' : 'false'}">
                             ${icon('star')}
                         </button>
+                        <button type="button" class="btn-action btn-checklist" title="Checklist" aria-label="Show checklist" aria-expanded="${expanded ? 'true' : 'false'}">
+                            ${icon('list')}
+                        </button>
                         <button type="button" class="btn-action btn-edit" title="Edit task details" aria-label="Edit task">
                             ${icon('pencil')}
                         </button>
@@ -2113,7 +2346,60 @@
                             ${icon('trash')}
                         </button>
                     </div>
+                    </div>
                 `;
+
+                // Checklist, opened in place on the card (no dialog)
+                if (expanded) {
+                    var box = document.createElement('div');
+                    box.className = 'task-checklist';
+                    var list = document.createElement('div');
+                    subtasks.forEach(function(st) {
+                        var row = document.createElement('div');
+                        row.className = 'subtask-item-row' + (st.completed ? ' completed' : '');
+                        row.innerHTML = '<button type="button" class="subtask-check-btn" role="checkbox" aria-checked="' + (st.completed ? 'true' : 'false') + '">' + (st.completed ? icon('check') : '') + '</button>' +
+                            '<span class="subtask-title-text"></span>' +
+                            '<button type="button" class="subtask-delete-btn" title="Remove item" aria-label="Remove item">' + icon('x') + '</button>';
+                        row.querySelector('.subtask-title-text').textContent = st.title;
+                        row.querySelector('.subtask-check-btn').setAttribute('aria-label', (st.completed ? 'Mark not done: ' : 'Mark done: ') + st.title);
+                        row.querySelector('.subtask-check-btn').addEventListener('click', function() {
+                            st.completed = !st.completed;
+                            SoundFX.play(st.completed ? 'check' : 'uncheck');
+                            Haptics.tick();
+                            var allDone = task.subtasks.length > 0 && task.subtasks.every(function(x) { return x.completed; });
+                            App.persistTasks();
+                            if (st.completed && allDone && !task.completed) {
+                                showToast('Checklist complete', 'success', { label: 'Complete task', fn: function() { App.toggleTaskComplete(task.id); } });
+                            }
+                        });
+                        row.querySelector('.subtask-delete-btn').addEventListener('click', function() {
+                            task.subtasks = task.subtasks.filter(function(x) { return x !== st; });
+                            SoundFX.play('delete');
+                            App.persistTasks();
+                        });
+                        list.appendChild(row);
+                    });
+                    box.appendChild(list);
+                    var addRow = document.createElement('div');
+                    addRow.className = 'checklist-add';
+                    addRow.innerHTML = '<input type="text" class="form-input checklist-add-input" maxlength="120" placeholder="Add an item" aria-label="Add a checklist item" autocomplete="off" enterkeyhint="done"><button type="button" class="btn btn-secondary checklist-add-btn">Add</button>';
+                    var addInput = addRow.querySelector('input');
+                    var addItem = function() {
+                        var title = addInput.value.trim();
+                        if (!title) return;
+                        if (!task.subtasks) task.subtasks = [];
+                        task.subtasks.push({ id: 'st_' + Date.now() + '_' + Math.floor(Math.random() * 1000), title: title, completed: false });
+                        SoundFX.play('pop');
+                        Haptics.tick();
+                        App.persistTasks();
+                        var again = document.querySelector('.task-item[data-task-id="' + task.id + '"] .checklist-add-input');
+                        if (again) again.focus();
+                    };
+                    addRow.querySelector('button').addEventListener('click', addItem);
+                    addInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); addItem(); } });
+                    box.appendChild(addRow);
+                    item.appendChild(box);
+                }
 
                 // Event Listeners
                 item.querySelector('.task-checkbox').addEventListener('click', function(e) {
@@ -2123,8 +2409,23 @@
 
                 item.querySelector('.btn-star').addEventListener('click', function(e) {
                     e.stopPropagation();
+                    Haptics.tap();
                     App.toggleStar(task.id);
                 });
+
+                var toggleExpand = function(e) {
+                    e.stopPropagation();
+                    expandedTasks[task.id] = !expandedTasks[task.id];
+                    Haptics.tick();
+                    App.renderTaskList();
+                    if (expandedTasks[task.id] && !(task.subtasks || []).length) {
+                        var f = document.querySelector('.task-item[data-task-id="' + task.id + '"] .checklist-add-input');
+                        if (f) f.focus();
+                    }
+                };
+                item.querySelector('.btn-checklist').addEventListener('click', toggleExpand);
+                var expandBadge = item.querySelector('.btn-expand');
+                if (expandBadge) expandBadge.addEventListener('click', toggleExpand);
 
                 item.querySelector('.btn-edit').addEventListener('click', function(e) {
                     e.stopPropagation();
@@ -2133,9 +2434,16 @@
 
                 item.querySelector('.btn-delete').addEventListener('click', function(e) {
                     e.stopPropagation();
-                    if (confirm('Delete "' + task.title + '"?')) {
-                        App.deleteTask(task.id);
-                    }
+                    App.deleteTask(task.id); // undo is offered in the toast
+                });
+
+                item.querySelector('.swipe-done').addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    App.toggleTaskComplete(task.id);
+                });
+                item.querySelector('.swipe-del').addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    App.deleteTask(task.id);
                 });
 
                 // Clicking task card opens edit details

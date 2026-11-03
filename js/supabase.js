@@ -483,6 +483,7 @@
 
         // Delete a todo from Supabase
         deleteTodo: async function(todoId) {
+            delete syncedRows[todoId]; // forget it, so undoing a delete saves the row again
             var c = this.getClient();
             if (!c) return;
             await c.from('todos').delete().eq('id', todoId);
