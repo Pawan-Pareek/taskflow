@@ -169,6 +169,15 @@
         return list;
     }
 
+    // Comparable fingerprint of a task list, ignoring how the cloud formats times or orders rows
+    function taskSignature(list) {
+        return JSON.stringify(list.slice().sort(function(a, b) { return a.id < b.id ? -1 : 1; }).map(function(t) {
+            var r = t.remindAt ? new Date(t.remindAt).getTime() : 0;
+            return [t.id, t.title, t.notes || '', t.priority, t.category, t.type || 'daily', t.repeat || '', t.repeatDay || 0,
+                r, !!t.reminded, t.dueDate || '', !!t.completed, !!t.starred, t.subtasks || []];
+        }));
+    }
+
     // Categories are per user and editable. A task stores the category id, so renaming never
     // detaches tasks. The list lives on this device and, when signed in, in the cloud.
     var CATEGORIES_KEY = 'taskflow_categories';
@@ -358,12 +367,20 @@
                     var u = TaskAPI.getCurrentUser();
                     if (u) {
                         this._realtimeSubscribed = true;
-                        window.TaskSupabase.subscribeToChanges(u.id, async function() {
-                            var updated = await window.TaskSupabase.getTodos(u.id);
-                            if (Array.isArray(updated)) {
-                                tasks = applyKnownTypes(updated);
+                        // Saving writes every task, so each save echoes back as one change per task.
+                        // Wait for the burst to settle, and skip the rebuild when nothing really changed:
+                        // replacing the list under the cursor made hovered rows flicker.
+                        var syncTimer = null;
+                        window.TaskSupabase.subscribeToChanges(u.id, function() {
+                            clearTimeout(syncTimer);
+                            syncTimer = setTimeout(async function() {
+                                var updated = await window.TaskSupabase.getTodos(u.id);
+                                if (!Array.isArray(updated)) return;
+                                var next = applyKnownTypes(updated);
+                                if (taskSignature(next) === taskSignature(tasks)) return;
+                                tasks = next;
                                 App.render();
-                            }
+                            }, 400);
                         });
                     }
                 }
