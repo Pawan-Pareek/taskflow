@@ -699,3 +699,27 @@ input[data-label]:not(.is-empty)::before, input[data-label].is-empty:focus::befo
 .label-hint { font-weight: 400; color: var(--muted); }
 .ea-error { color: var(--danger); }
 #notif-alert-modal textarea { resize: vertical; }
+
+/* 12-hour reminder / alert time: hour, minute, AM-PM */
+.rp-source { display: none !important; }
+.remind-picker { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.remind-picker .rp-date { flex: 1 1 210px; min-width: 0; }
+.rp-time { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+.rp-time.hidden { display: none; }
+.rp-time select { width: auto; min-width: 0; }
+.rp-time select:invalid { color: var(--muted); }
+.rp-time select option { color: var(--text); }
+.rp-time-only select { flex: 1; }
+.rp-clear { flex-shrink: 0; color: var(--muted); }
+.remind-edit-row .remind-picker { flex: 1; }
+@media (max-width: 768px) {
+    .remind-picker .rp-date { flex: 1 1 100%; }
+    .rp-time { flex: 1 1 100%; }
+    .rp-time select { flex: 1; }
+    .field-stack .remind-picker .quick-date-picker { width: 100%; }
+}
+@media (min-width: 769px) {
+    #quick-remind-field { flex: 1 1 100%; }
+    #quick-remind-field .remind-picker { flex-wrap: nowrap; max-width: 560px; }
+    #quick-remind-field .rp-date { flex: 1 1 auto; }
+}

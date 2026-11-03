@@ -123,7 +123,7 @@
         var d = new Date(iso);
         var today = fmtDate(new Date());
         var day = fmtDate(d) === today ? 'Today' : MONTH_NAMES[d.getMonth()] + ' ' + d.getDate();
-        return day + ', ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+        return day + ', ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12: true }).replace(/(am|pm)/i, function(m) { return m.toUpperCase(); });
     }
 
     function icon(name) {
@@ -373,6 +373,12 @@
     var App = {
         init: async function() {
             await TaskAuth.init();
+            // 12-hour hour / minute / AM-PM instead of the browser's own (often 24-hour) time pickers
+            if (window.TimePicker) {
+                TimePicker.attachDateTime(document.getElementById('quick-remind-at'), { selectClass: 'quick-pill-select', dateClass: 'quick-date-picker', label: 'Remind', labelWidth: '4.2em', clearButton: true });
+                TimePicker.attachDateTime(document.getElementById('edit-task-remind'), { selectClass: 'form-select', dateClass: 'form-input' });
+                TimePicker.attachTime(document.getElementById('ea-time'), { selectClass: 'form-select' });
+            }
             this.setupEventListeners();
             this.setupMobileGestures();
 
@@ -1248,7 +1254,7 @@
             var timeLabel = function(hhmm) {
                 var p = hhmm.split(':');
                 var d = new Date(); d.setHours(+p[0], +p[1], 0, 0);
-                return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+                return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12: true }).replace(/(am|pm)/i, function(m) { return m.toUpperCase(); });
             };
 
             // Day chips
