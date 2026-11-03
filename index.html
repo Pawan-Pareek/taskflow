@@ -176,14 +176,16 @@
                 </div>
                 <div class="view-tools">
                     <div class="date-filter-container">
-                        <label for="date-filter-input">Date</label>
-                        <input type="date" id="date-filter-input" class="quick-date-picker" data-placeholder="Any date" title="Show tasks and goals for this date">
-                        <button type="button" id="btn-clear-date-filter" class="btn-clear-date" title="Clear date filter" aria-label="Clear date filter">
-                            <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
-                        </button>
+                        <label class="field-cap" for="date-filter-input">Search tasks by date</label>
+                        <div class="field-row">
+                            <input type="date" id="date-filter-input" class="quick-date-picker" data-placeholder="Any date" title="Show tasks and goals for this date">
+                            <button type="button" id="btn-clear-date-filter" class="btn-clear-date" title="Clear date filter" aria-label="Clear date filter">
+                                <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
+                            </button>
+                        </div>
                     </div>
                     <div class="sort-container">
-                        <label for="sort-selector">Sort</label>
+                        <label class="field-cap" for="sort-selector">Sort by</label>
                         <select id="sort-selector" class="sort-select">
                             <option value="priority">Priority</option>
                             <option value="dueDate">Due date</option>
@@ -228,7 +230,10 @@
                                 <option value="low">Low</option>
                             </select>
                             <select id="quick-category-select" class="quick-pill-select" title="Category" aria-label="Category"></select>
-                            <input type="date" id="quick-due-date" class="quick-date-picker" title="Due date" aria-label="Due date">
+                            <div class="field-stack" id="quick-due-field">
+                                <label class="field-cap" for="quick-due-date">Set task for a date</label>
+                                <input type="date" id="quick-due-date" class="quick-date-picker" title="Date this task is for">
+                            </div>
                             <select id="quick-repeat-select" class="quick-pill-select" title="Repeat" aria-label="Repeat">
                                 <option value="" selected>Does not repeat</option>
                                 <option value="daily">Every day</option>
@@ -236,7 +241,10 @@
                                 <option value="weekly">Every week</option>
                                 <option value="monthly">Every month</option>
                             </select>
-                            <input type="datetime-local" id="quick-remind-at" class="quick-date-picker" data-placeholder="Remind me (optional)" title="Remind me at (optional)" aria-label="Remind me at (optional)">
+                            <div class="field-stack" id="quick-remind-field">
+                                <label class="field-cap" for="quick-remind-at">Set reminder for this task</label>
+                                <input type="datetime-local" id="quick-remind-at" class="quick-date-picker" data-placeholder="Pick date and time" title="Pick the date and time to be reminded (optional)">
+                            </div>
                         </div>
 
                     </div>

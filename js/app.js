@@ -1278,7 +1278,7 @@
             var editType = document.getElementById('edit-task-type');
             var quickDate = document.getElementById('quick-due-date');
             var editGroup = document.getElementById('edit-duedate-group');
-            if (quickDate && quickType) quickDate.classList.toggle('hidden', quickType.value === 'custom');
+            if (quickDate && quickType) (quickDate.closest('.field-stack') || quickDate).classList.toggle('hidden', quickType.value === 'custom');
             if (editGroup && editType) editGroup.classList.toggle('hidden', editType.value === 'custom');
             var quickRepeat = document.getElementById('quick-repeat-select');
             var editRepeat = document.getElementById('edit-repeat-group');
