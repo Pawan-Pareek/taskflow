@@ -289,7 +289,10 @@
         if (!container) return;
         var toast = document.createElement('div');
         toast.className = 'toast-pill ' + (type || 'info');
-        toast.innerHTML = '<span>' + msg + '</span>';
+        // textContent, not innerHTML: messages can contain task titles and user names
+        var span = document.createElement('span');
+        span.textContent = msg;
+        toast.appendChild(span);
         container.appendChild(toast);
         setTimeout(function() {
             toast.classList.add('fade-out');
@@ -299,9 +302,17 @@
 
     var App = {
         init: async function() {
-            TaskAuth.init();
+            await TaskAuth.init();
             this.setupEventListeners();
             this.setupMobileGestures();
+
+            // Buttons that used to carry inline onclick/onsubmit (blocked by the page's Content-Security-Policy)
+            var quickForm = document.getElementById('quick-add-form');
+            if (quickForm) quickForm.addEventListener('submit', function(e) { e.preventDefault(); });
+            var fabAdd = document.getElementById('mob-fab-add');
+            if (fabAdd) fabAdd.addEventListener('click', function() { document.getElementById('quick-add-input').focus(); });
+            var drawerBtn = document.getElementById('mob-nav-drawer');
+            if (drawerBtn) drawerBtn.addEventListener('click', function() { App.openDrawer(); });
             this.setupConnectMobileModal();
             this.setupThemeToggle();
             this.setupSoundToggle();

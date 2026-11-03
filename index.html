@@ -16,13 +16,7 @@
     <link rel="icon" type="image/png" href="favicon.png">
     <link rel="apple-touch-icon" href="icons/icon.png">
     <link rel="manifest" href="manifest.json">
-    <script>
-        // Apply a saved light/dark choice before first paint (otherwise the device setting is used)
-        try {
-            var t = localStorage.getItem('taskflow_theme_choice');
-            if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
-        } catch (e) {}
-    </script>
+    <script src="js/theme-init.js"></script>
     <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
@@ -206,7 +200,7 @@
 
             <!-- Add task -->
             <section class="quick-add-card" aria-label="Add a task">
-                <form id="quick-add-form" onsubmit="return false">
+                <form id="quick-add-form">
                     <div class="quick-add-input-row">
                         <svg class="icon quick-add-bullet" aria-hidden="true"><use href="#i-plus"/></svg>
                         <input type="text" id="quick-add-input" class="quick-add-input" placeholder="Add a task" aria-label="Task title" autocomplete="off" enterkeyhint="done">
@@ -264,14 +258,14 @@
                     <span class="mobile-nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-list"/></svg></span>
                     <span>All</span>
                 </button>
-                <button type="button" class="mobile-fab-add" id="mob-fab-add" onclick="document.getElementById('quick-add-input').focus();" aria-label="Add new task">
+                <button type="button" class="mobile-fab-add" id="mob-fab-add" aria-label="Add new task">
                     <svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>
                 </button>
                 <button type="button" class="mobile-nav-btn" data-filter="weekly" id="mob-nav-weekly">
                     <span class="mobile-nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-calendar-week"/></svg></span>
                     <span>Goals</span>
                 </button>
-                <button type="button" class="mobile-nav-btn" id="mob-nav-drawer" onclick="TaskApp.openDrawer();">
+                <button type="button" class="mobile-nav-btn" id="mob-nav-drawer">
                     <span class="mobile-nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-menu"/></svg></span>
                     <span>Menu</span>
                 </button>
@@ -301,8 +295,8 @@
 
             <form id="form-login">
                 <div class="form-group" style="margin-top:0">
-                    <label for="login-identifier">Username or email</label>
-                    <input type="text" id="login-identifier" class="form-input" placeholder="alex or alex@example.com" required autocomplete="username">
+                    <label for="login-identifier">Email</label>
+                    <input type="email" id="login-identifier" class="form-input" placeholder="you@example.com" required autocomplete="email">
                 </div>
                 <div class="form-group">
                     <label for="login-password">Password</label>
@@ -578,16 +572,10 @@
 
     <div id="toast-container" class="toast-container" role="status" aria-live="polite"></div>
 
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', function() {
-                navigator.serviceWorker.register('sw.js').catch(function() {});
-            });
-        }
-    </script>
+    <script src="js/sw-register.js"></script>
 
     <!-- Supabase client -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.8/dist/umd/supabase.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.8/dist/umd/supabase.js" integrity="sha384-l7yJnh/cWKcqeTC5adHUdc5b+J4Kb2QTGRSkCQehn1YT5xEFlrgwnXOYuvrtI1F6" crossorigin="anonymous"></script>
     <script src="js/config.js"></script>
     <script src="js/supabase.js"></script>
 

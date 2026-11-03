@@ -1,4 +1,4 @@
-const CACHE_NAME = 'taskflow-pro-v1';
+const CACHE_NAME = 'taskflow-pro-v2'; // v2: drops v1 entries, which also held cached cloud (Supabase) responses
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
@@ -41,6 +41,11 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
     // Only cache GET requests and non-API requests
     if (event.request.method !== 'GET' || event.request.url.includes('/api/')) {
+        return;
+    }
+    // Only this site's own files are cached. Cloud (Supabase) responses hold a user's tasks and
+    // must never be stored where the next person on a shared device could read them offline.
+    if (new URL(event.request.url).origin !== self.location.origin) {
         return;
     }
 

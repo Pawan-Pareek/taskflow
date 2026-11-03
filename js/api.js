@@ -201,14 +201,13 @@
             if (window.TaskSupabase && window.TaskSupabase.isEnabled()) {
                 try {
                     var cloudUser = await window.TaskSupabase.registerUser(userData);
+                    if (cloudUser.pending) return cloudUser; // waiting for the emailed confirmation link
                     var token = 'tok_cloud_' + cloudUser.id + '_' + Date.now();
                     this.setToken(token);
                     this.setCurrentUser(cloudUser);
                     return { user: cloudUser, token: token };
                 } catch(err) {
-                    if (err.message && (err.message.includes('already registered') || err.message.includes('table is missing'))) {
-                        throw err;
-                    }
+                    if (err.userFacing) throw err;
                     console.warn('Supabase register error:', err);
                 }
             }
@@ -297,9 +296,7 @@
                     this.setCurrentUser(cloudUser);
                     return { user: cloudUser, token: token };
                 } catch(err) {
-                    if (err.message && (err.message.includes('Invalid username') || err.message.includes('table is missing'))) {
-                        throw err;
-                    }
+                    if (err.userFacing) throw err;
                     console.warn('Supabase login error:', err);
                 }
             }
@@ -350,6 +347,16 @@
 
         // LOGOUT
         logout: function() {
+            var user = this.getCurrentUser();
+            if (window.TaskSupabase && window.TaskSupabase.isEnabled() && user && window.TaskSupabase.isUuid(user.id)) {
+                window.TaskSupabase.signOut();
+                // Don't leave this account's cached tasks behind for the next person on a shared device
+                try {
+                    var db = getOfflineDB();
+                    delete db.todos[user.id];
+                    saveOfflineDB(db);
+                } catch (e) {}
+            }
             this.setToken(null);
             this.setCurrentUser(null);
         },

@@ -7,6 +7,35 @@
     var client = null;
     var realtimeChannel = null;
     var settingsChannel = null;
+    // What the cloud is known to hold for each task id (as the JSON of its row). Saves send only tasks that differ,
+    // instead of re-writing every task on every change (which also made every device re-render the whole list).
+    var syncedRows = {};
+
+    // App task -> database row
+    function toRow(t, userId) {
+        var row = {
+            id: t.id,
+            user_id: userId,
+            title: t.title,
+            notes: t.notes || '',
+            priority: t.priority || 'medium',
+            category: t.category || 'personal',
+            // lists other than the first are stored as custom:<id>, so no new column is needed
+            goal_type: t.type === 'custom' && t.list && t.list !== 'custom' ? 'custom:' + t.list : (t.type || 'daily'),
+            repeat_rule: t.repeat || null,
+            repeat_day: t.repeat ? (t.repeatDay || null) : null,
+            remind_at: t.remindAt || null,
+            due_date: t.dueDate || null,
+            completed: !!t.completed,
+            starred: !!t.starred,
+            subtasks: t.subtasks || []
+        };
+        // The server flips `reminded` to true after sending. Only write it from the
+        // client when the reminder time was just set/changed, so a stale copy can
+        // never re-arm a reminder that was already delivered.
+        if (t.remindDirty) row.reminded = false;
+        return row;
+    }
 
     var TaskSupabase = {
         getUrl: function() {
@@ -34,7 +63,7 @@
             if (url && key && sbLib) {
                 try {
                     client = sbLib.createClient(url, key, {
-                        auth: { persistSession: true, autoRefreshToken: false }
+                        auth: { persistSession: true, autoRefreshToken: true }
                     });
                     return client;
                 } catch(e) {
@@ -116,97 +145,94 @@
             return { success: true, cleared: false };
         },
 
-        // Secure simple password hasher
-        hashPassword: function(str) {
-            var hash = 0;
-            for (var i = 0; i < str.length; i++) {
-                var char = str.charCodeAt(i);
-                hash = ((hash << 5) - hash) + char;
-                hash |= 0;
-            }
-            return 'h_' + Math.abs(hash).toString(16);
+        // ---- Accounts: Supabase Auth (passwords are hashed server-side; every request carries the user's own token) ----
+
+        isUuid: function(id) {
+            return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id || '');
         },
 
-        // Cloud User Registration (works across all browsers and devices)
+        // Auth user -> the small profile object the app keeps
+        profileFrom: function(u) {
+            var m = (u && u.user_metadata) || {};
+            var fallback = ((u && u.email) || 'user').split('@')[0];
+            return {
+                id: u.id,
+                username: m.username || fallback,
+                name: m.name || m.username || fallback,
+                email: u.email,
+                avatar: m.avatar || 'avatar-1'
+            };
+        },
+
+        userError: function(message) {
+            var e = new Error(message);
+            e.userFacing = true; // shown to the user as is, never swallowed by the offline fallbacks
+            return e;
+        },
+
+        // The signed-in user from the stored session (null when signed out or the session is gone)
+        getSessionUser: async function() {
+            var c = this.getClient();
+            if (!c) return null;
+            var res = await c.auth.getSession();
+            return res.data && res.data.session ? this.profileFrom(res.data.session.user) : null;
+        },
+
+        // Old accounts (made before Supabase Auth) are matched by their verified email and moved over once
+        claimLegacyData: async function() {
+            var c = this.getClient();
+            if (!c) return 0;
+            var res = await c.rpc('claim_legacy_data');
+            if (res.error) {
+                console.warn('Supabase claim_legacy_data warning (run supabase/secure-rls.sql):', res.error.message);
+                return 0;
+            }
+            return res.data || 0;
+        },
+
         registerUser: async function(userData) {
             var c = this.getClient();
             if (!c) throw new Error('Supabase cloud database not connected.');
-            var uLower = userData.username.trim().toLowerCase();
-            var eLower = userData.email.trim().toLowerCase();
-
-            // Check if username or email is already taken
-            var checkUser = await c.from('users').select('id').ilike('username', uLower);
-            var checkEmail = await c.from('users').select('id').ilike('email', eLower);
-            if ((checkUser.data && checkUser.data.length > 0) || (checkEmail.data && checkEmail.data.length > 0)) {
-                throw new Error('Username or email is already registered.');
-            }
-
-            var hash = this.hashPassword(userData.password);
-            var newId = 'usr_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
-            var newUserRow = {
-                id: newId,
-                username: userData.username.trim(),
-                name: userData.name ? userData.name.trim() : userData.username.trim(),
+            var res = await c.auth.signUp({
                 email: userData.email.trim(),
-                password_hash: hash,
-                avatar: userData.avatar || 'avatar-1'
-            };
-
-            var res = await c.from('users').insert([newUserRow]);
+                password: userData.password,
+                options: { data: {
+                    username: userData.username.trim(),
+                    name: (userData.name || userData.username).trim(),
+                    avatar: userData.avatar || 'avatar-1'
+                } }
+            });
             if (res.error) {
-                if (res.error.code === '42P01') {
-                    throw new Error('Cloud "users" table is missing in Supabase.\nPlease run the SQL setup script from Settings.');
-                }
-                throw new Error(res.error.message || 'Registration failed.');
+                var msg = res.error.message || 'Registration failed.';
+                if (/already registered|already been registered/i.test(msg)) throw this.userError('Username or email is already registered.');
+                throw this.userError(msg);
             }
-
-            return {
-                id: newUserRow.id,
-                username: newUserRow.username,
-                name: newUserRow.name,
-                email: newUserRow.email,
-                avatar: newUserRow.avatar
-            };
+            // With "Confirm email" on (required for production) there is no session until the link is opened
+            if (!res.data.session) {
+                return { pending: true, message: 'Account created. Open the confirmation link we emailed you, then sign in.' };
+            }
+            await this.claimLegacyData();
+            return this.profileFrom(res.data.session.user);
         },
 
-        // Cloud User Login (works across all browsers and devices)
         loginUser: async function(identifier, password) {
             var c = this.getClient();
             if (!c) throw new Error('Supabase cloud database not connected.');
-            var idTrim = identifier.trim().toLowerCase();
-            var hash = this.hashPassword(password);
-
-            // Try login by username first, then by email
-            var byUsername = await c.from('users').select('*').ilike('username', idTrim);
-            if (byUsername.error && byUsername.error.code === '42P01') {
-                throw new Error('Cloud "users" table is missing in Supabase.\nPlease run the SQL setup script from Settings.');
+            var email = identifier.trim();
+            if (email.indexOf('@') < 0) throw this.userError('Sign in with your email address.');
+            var res = await c.auth.signInWithPassword({ email: email, password: password });
+            if (res.error) {
+                if (/not confirmed/i.test(res.error.message || '')) throw this.userError('Confirm your email first: open the link we sent you, then sign in.');
+                if (/invalid login/i.test(res.error.message || '')) throw this.userError('Invalid email or password.');
+                throw this.userError(res.error.message || 'Sign in failed.');
             }
+            await this.claimLegacyData();
+            return this.profileFrom(res.data.user);
+        },
 
-            var byEmail = await c.from('users').select('*').ilike('email', idTrim);
-
-            var list = [];
-            if (byUsername.data && byUsername.data.length > 0) list = list.concat(byUsername.data);
-            if (byEmail.data && byEmail.data.length > 0) list = list.concat(byEmail.data);
-
-            if (list.length === 0) {
-                throw new Error('Invalid username/email or password.');
-            }
-
-            var matched = list.find(function(u) {
-                return u.password_hash === hash || u.password_hash === password;
-            });
-
-            if (!matched) {
-                throw new Error('Invalid username/email or password.');
-            }
-
-            return {
-                id: matched.id,
-                username: matched.username,
-                name: matched.name,
-                email: matched.email,
-                avatar: matched.avatar
-            };
+        signOut: async function() {
+            var c = this.getClient();
+            if (c) { try { await c.auth.signOut({ scope: 'local' }); } catch (e) {} } // this device only
         },
 
         // Fetch todos for the current user
@@ -225,7 +251,7 @@
             }
 
             // Map DB columns to TaskFlow task format
-            return (res.data || []).map(function(row) {
+            var mapped = (res.data || []).map(function(row) {
                 return {
                     id: row.id,
                     title: row.title,
@@ -245,39 +271,23 @@
                     createdAt: row.created_at
                 };
             });
+            syncedRows = {};
+            mapped.forEach(function(t) { syncedRows[t.id] = JSON.stringify(toRow(t, userId)); });
+            return mapped;
         },
 
-        // Save / upsert tasks batch
+        // Save / upsert only the tasks that changed since the cloud copy we know of
         saveTodos: async function(todos, userId) {
             var c = this.getClient();
             if (!c || !userId) return;
 
             if (!todos || todos.length === 0) return;
 
-            var rows = todos.map(function(t) {
-                var row = {
-                    id: t.id,
-                    user_id: userId,
-                    title: t.title,
-                    notes: t.notes || '',
-                    priority: t.priority || 'medium',
-                    category: t.category || 'personal',
-                    // lists other than the first are stored as custom:<id>, so no new column is needed
-                    goal_type: t.type === 'custom' && t.list && t.list !== 'custom' ? 'custom:' + t.list : (t.type || 'daily'),
-                    repeat_rule: t.repeat || null,
-                    repeat_day: t.repeat ? (t.repeatDay || null) : null,
-                    remind_at: t.remindAt || null,
-                    due_date: t.dueDate || null,
-                    completed: !!t.completed,
-                    starred: !!t.starred,
-                    subtasks: t.subtasks || []
-                };
-                // The server flips `reminded` to true after sending. Only write it from the
-                // client when the reminder time was just set/changed, so a stale copy can
-                // never re-arm a reminder that was already delivered.
-                if (t.remindDirty) row.reminded = false;
-                return row;
-            });
+            var rows = todos.map(function(t) { return toRow(t, userId); });
+            var changed = rows.filter(function(r) { return syncedRows[r.id] !== JSON.stringify(r); });
+            if (changed.length === 0) return;
+            var sentSigs = changed.map(function(r) { return JSON.stringify(r); });
+            rows = changed;
 
             var res = await c.from('todos').upsert(rows, { onConflict: 'id' });
             if (res.error && /goal_type|remind_at|reminded|repeat_rule|repeat_day/.test(res.error.message || '')) {
@@ -292,6 +302,7 @@
                 }), { onConflict: 'id' });
             }
             if (!res.error) {
+                rows.forEach(function(r, i) { syncedRows[r.id] = sentSigs[i]; });
                 todos.forEach(function(t) { delete t.remindDirty; });
             }
             if (res.error) {

@@ -14,11 +14,11 @@
     var currentTab = 'login'; // 'login' or 'register'
 
     var Auth = {
-        init: function() {
+        init: async function() {
             authModal = document.getElementById('auth-modal');
             this.setupListeners();
             this.renderAvatarPicker();
-            this.checkSession();
+            await this.checkSession();
         },
 
         getAvatarMeta: function(avatarId) {
@@ -98,10 +98,11 @@
             }
         },
 
-        showError: function(msg) {
+        showError: function(msg, isInfo) {
             var errorBox = document.getElementById('auth-error-message');
             if (errorBox) {
                 errorBox.textContent = msg;
+                errorBox.classList.toggle('is-info', !!isInfo);
                 errorBox.classList.remove('hidden');
             }
         },
@@ -170,13 +171,20 @@
                     try {
                         submitBtn.disabled = true;
                         submitBtn.innerHTML = '<span class="spinner"></span> Creating account...';
-                        await TaskAPI.register({
+                        var result = await TaskAPI.register({
                             name: name || username,
                             username: username,
                             email: email,
                             password: password,
                             avatar: selectedAvatar
                         });
+                        if (result && result.pending) {
+                            // The account exists but must be confirmed by email before the first sign in
+                            self.switchTab('login');
+                            document.getElementById('login-identifier').value = email;
+                            self.showError(result.message, true);
+                            return;
+                        }
                         SoundFX.play('fanfare');
                         Confetti.burst();
                         self.onAuthSuccess();
@@ -192,6 +200,14 @@
 
             // Quick Demo Account Login button
             var demoBtn = document.getElementById('btn-demo-login');
+            // The shared demo account only makes sense on-device. With cloud accounts it would create a real
+            // login with a made-up email address, so the button is hidden there.
+            if (demoBtn && window.TaskSupabase && TaskSupabase.isEnabled()) {
+                demoBtn.classList.add('hidden');
+                var divider = document.querySelector('.auth-divider');
+                if (divider) divider.classList.add('hidden');
+                demoBtn = null;
+            }
             if (demoBtn) {
                 demoBtn.addEventListener('click', async function() {
                     try {
@@ -251,8 +267,23 @@
             });
         },
 
-        checkSession: function() {
+        checkSession: async function() {
             var currentUser = TaskAPI.getCurrentUser();
+            // A cloud user must still hold a live Supabase session. Without one (signed out elsewhere, or an
+            // account from before Supabase Auth) the saved profile is dropped and the user signs in again.
+            if (currentUser && window.TaskSupabase && TaskSupabase.isEnabled()) {
+                var live = null;
+                try { live = await TaskSupabase.getSessionUser(); } catch (e) { live = undefined; }
+                if (live === undefined) {
+                    // Could not reach Supabase (offline): keep the cached profile for local use
+                } else if (!live) {
+                    TaskAPI.logout();
+                    currentUser = null;
+                } else if (live.id !== currentUser.id) {
+                    TaskAPI.setCurrentUser(live);
+                    currentUser = live;
+                }
+            }
             if (currentUser) {
                 this.updateUI();
                 this.hideModal();
@@ -267,7 +298,7 @@
             this.updateUI();
             this.hideModal();
             window.dispatchEvent(new CustomEvent('taskflow:login', { detail: user }));
-            window.showToast('Signed in as ' + (user.name || user.username), 'success');
+            window.showToast('Signed in as ' + (user.name || user.username), 'success'); // shown as text, never HTML
         },
 
         updateUI: function() {

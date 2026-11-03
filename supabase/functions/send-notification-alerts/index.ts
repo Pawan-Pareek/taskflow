@@ -132,10 +132,14 @@ Deno.serve(async (req) => {
   let body: { test?: string } = {};
   try { body = await req.json(); } catch { /* cron sends {} */ }
 
-  // "Send test" button in Settings: send one alert now, at most once every 15 seconds
+  // "Send test" button in Settings: send one alert now, at most once every 15 seconds.
+  // Only the signed-in owner of the alert may do this (the public key alone is not enough).
   if (body.test) {
+    const token = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
+    const { data: who } = await supabase.auth.getUser(token);
+    if (!who?.user) return json({ error: "Sign in to send a test" }, 401);
     const { data: a } = await supabase.from("notification_alerts").select("*").eq("id", body.test).maybeSingle();
-    if (!a) return json({ error: "Alert not found" }, 404);
+    if (!a || a.user_id !== who.user.id) return json({ error: "Alert not found" }, 404);
     if (a.last_test_at && Date.now() - new Date(a.last_test_at).getTime() < 15000) {
       return json({ error: "Please wait a few seconds before testing again" }, 429);
     }
