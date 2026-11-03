@@ -718,8 +718,20 @@ input[data-label]:not(.is-empty)::before, input[data-label].is-empty:focus::befo
     .rp-time select { flex: 1; }
     .field-stack .remind-picker .quick-date-picker { width: 100%; }
 }
+/* Desktop composer: four dropdowns on one row, then the task date and the reminder side by side */
 @media (min-width: 769px) {
-    #quick-remind-field { flex: 1 1 100%; }
-    #quick-remind-field .remind-picker { flex-wrap: nowrap; max-width: 560px; }
-    #quick-remind-field .rp-date { flex: 1 1 auto; }
+    .quick-options-left { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; width: 100%; align-items: start; }
+    .quick-options-left > * { min-width: 0; width: 100%; }
+    .quick-options-left #quick-category-select { order: 3; }
+    .quick-options-left #quick-repeat-select { order: 4; }
+    .quick-options-left #quick-due-field { order: 5; grid-column: span 2; }
+    .quick-options-left #quick-remind-field { order: 6; grid-column: span 2; }
+    .quick-options-left:has(#quick-due-field.hidden) #quick-remind-field { grid-column: span 4; }
+    .quick-options-left .quick-pill-select, .quick-options-left .quick-date-picker, .quick-options-left .rp-time select { height: 40px; }
+    /* the date sits on top; the hour / minute / AM-PM row opens underneath once a date is chosen */
+    #quick-remind-field .rp-date { flex: 1 1 100%; }
+    #quick-remind-field .rp-time { flex: 1 1 100%; }
+    #quick-remind-field .rp-time select { flex: 1; width: auto; }
+    #quick-remind-field .rp-clear { flex: 0 0 auto; width: 40px; }
+    .field-stack .quick-date-picker { width: 100%; }
 }
