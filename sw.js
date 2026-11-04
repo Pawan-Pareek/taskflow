@@ -1,4 +1,4 @@
-const CACHE_NAME = 'taskflow-pro-v4'; // v2: drops v1 entries, which also held cached cloud (Supabase) responses
+const CACHE_NAME = 'taskflow-pro-v5'; // v2: drops v1 entries, which also held cached cloud (Supabase) responses
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
