@@ -19,8 +19,11 @@
         s.className = cls;
         s.setAttribute('aria-label', label);
         if (placeholder) {
-            s.required = true; // an unchosen select reads as a muted hint (see .rp-time select:invalid)
+            // Not "required": a hidden required select inside a form blocks that form's Save button.
+            // An unchosen select is just shown in a muted colour (the .unset class).
             s.appendChild(option('', placeholder, true));
+            s.classList.add('unset');
+            s.addEventListener('change', function() { s.classList.toggle('unset', !s.value); });
         }
         return s;
     }
@@ -39,6 +42,9 @@
         wrap.appendChild(hour);
         wrap.appendChild(min);
         wrap.appendChild(ap);
+        function muted() {
+            [hour, min, ap].forEach(function(s) { s.classList.toggle('unset', withPlaceholders && !s.value); });
+        }
         return {
             wrap: wrap, hour: hour, min: min, ap: ap,
             // {h24, min} when all three are chosen, otherwise null
@@ -50,17 +56,19 @@
                 if (h24 === null) {
                     hour.value = ''; min.value = ''; ap.value = '';
                     if (!withPlaceholders) { hour.value = '12'; min.value = '00'; ap.value = 'AM'; }
-                    return;
+                } else {
+                    hour.value = String(h24 % 12 === 0 ? 12 : h24 % 12);
+                    min.value = pad(minute);
+                    ap.value = h24 >= 12 ? 'PM' : 'AM';
                 }
-                hour.value = String(h24 % 12 === 0 ? 12 : h24 % 12);
-                min.value = pad(minute);
-                ap.value = h24 >= 12 ? 'PM' : 'AM';
+                muted();
             },
             // Anything still unchosen gets a sensible default, so one tap gives a complete time
             fillMissing: function(dh, dm, dap) {
                 if (!hour.value) hour.value = String(dh);
                 if (!min.value) min.value = pad(dm);
                 if (!ap.value) ap.value = dap;
+                muted();
             }
         };
     }
