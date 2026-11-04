@@ -1,4 +1,4 @@
-const CACHE_NAME = 'taskflow-pro-v2'; // v2: drops v1 entries, which also held cached cloud (Supabase) responses
+const CACHE_NAME = 'taskflow-pro-v3'; // v2: drops v1 entries, which also held cached cloud (Supabase) responses
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
@@ -11,6 +11,7 @@ const ASSETS_TO_CACHE = [
     './js/app.js',
     './favicon.png',
     './icons/icon.png',
+    './icons/icon.svg',
     './manifest.json'
 ];
 
@@ -74,7 +75,7 @@ self.addEventListener('push', (event) => {
         self.registration.showNotification(data.title, {
             body: data.body,
             icon: './icons/icon.png',
-            badge: './icons/icon.png',
+            badge: './icons/badge.png',
             tag: data.taskId || 'taskflow-reminder',
             data: { url: data.url || '/' }
         })
