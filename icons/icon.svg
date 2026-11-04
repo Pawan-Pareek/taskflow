@@ -1,6 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <title>TaskFlow</title>
   <rect width="512" height="512" fill="#2563eb"/>
-  <path d="M150 262 L226 338 L364 172" fill="none" stroke="#ffffff" stroke-width="54" stroke-linecap="round" stroke-linejoin="round"/>
-  <rect x="186" y="384" width="140" height="28" rx="14" fill="#ffffff" fill-opacity="0.55"/>
+  <g fill="none" stroke-width="56" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M142 152 H370" stroke="#ffffff"/>
+    <path d="M256 152 V366" stroke="#ffffff"/>
+    <path d="M256 256 H332" stroke="#bfdbfe"/>
+  </g>
 </svg>
