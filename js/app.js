@@ -367,6 +367,43 @@
         });
         return { open: open, doneToday: doneToday };
     }
+    // Make a checklist item's text editable in place: click it (or focus it and press Enter), type, Enter to save,
+    // Escape to cancel. onDone(changed) runs afterwards so the caller can save and redraw.
+    function makeSubtaskEditable(span, st, onDone) {
+        span.classList.add('editable');
+        span.tabIndex = 0;
+        span.setAttribute('role', 'button');
+        span.title = 'Click to edit';
+        function begin() {
+            var input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'form-input subtask-edit-input';
+            input.maxLength = 120;
+            input.value = st.title;
+            input.setAttribute('aria-label', 'Edit checklist item');
+            var finished = false;
+            function finish(save) {
+                if (finished) return;
+                finished = true;
+                var v = input.value.trim();
+                var changed = !!(save && v && v !== st.title);
+                if (changed) st.title = v;
+                onDone(changed);
+            }
+            input.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+                else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(false); } // Escape here only cancels the edit, it does not close the dialog
+            });
+            input.addEventListener('blur', function() { finish(true); });
+            span.replaceWith(input);
+            input.focus();
+            input.select();
+        }
+        span.addEventListener('click', begin);
+        span.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === 'F2') { e.preventDefault(); begin(); }
+        });
+    }
     var expandedTasks = {};   // task id -> its checklist is open on the card
     var openSwipe = null;     // the task row currently slid open by a swipe
 
@@ -396,6 +433,7 @@
             this.setupCategories();
             this.setupNotifAlerts();
             this.setupHaptics();
+            this.setupSidebarToggle();
 
             // Check server and update status indicator
             this.checkSyncStatus();
@@ -1179,7 +1217,7 @@
                     li.className = 'nav-custom-row';
                     var active = currentFilter === 'custom' && currentCategory === 'all' && currentList === l.id;
                     li.innerHTML =
-                        '<button type="button" class="nav-item-btn' + (active ? ' active' : '') + '" data-filter="custom" data-list="' + l.id + '" id="nav-filter-' + l.id + '">' +
+                        '<button type="button" class="nav-item-btn' + (active ? ' active' : '') + '" data-filter="custom" data-list="' + l.id + '" id="nav-filter-' + l.id + '" title="' + App.escapeHtml(l.name) + '">' +
                         icon('list').replace('class="icon"', 'class="icon nav-icon"') +
                         '<span class="nav-label" id="' + (l.id === 'custom' ? 'custom-list-label' : 'list-label-' + l.id) + '">' + App.escapeHtml(l.name) + '</span>' +
                         '<span class="nav-badge-count" id="count-' + l.id + '">0</span></button>' +
@@ -1215,6 +1253,36 @@
             });
             this.updateBadgeCounts();
             this.syncDueDateInputs();
+        },
+
+        // Laptop only: shrink the sidebar to an icon strip and bring it back. (On phones it stays a slide-in menu.)
+        setupSidebarToggle: function() {
+            var KEY = 'taskflow_sidebar';
+            var container = document.querySelector('.app-container');
+            var btn = document.getElementById('btn-toggle-sidebar');
+            var sidebar = document.getElementById('app-sidebar');
+            if (!container || !btn || !sidebar) return;
+
+            // Hover names for the icon-only view (rows added later set their own title)
+            sidebar.querySelectorAll('.nav-item-btn').forEach(function(b) {
+                var label = b.querySelector('.nav-label');
+                if (label && !b.title) b.title = label.textContent.trim();
+            });
+
+            function apply(collapsed) {
+                container.classList.toggle('sidebar-collapsed', collapsed);
+                btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+                var text = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
+                btn.setAttribute('aria-label', text);
+                btn.title = text;
+            }
+            apply(storeGet(KEY) === 'collapsed');
+            btn.addEventListener('click', function() {
+                var collapsed = !container.classList.contains('sidebar-collapsed');
+                apply(collapsed);
+                storeSet(KEY, collapsed ? 'collapsed' : 'expanded');
+                SoundFX.play('pop');
+            });
         },
 
         setupHaptics: function() {
@@ -1497,6 +1565,7 @@
                     btn.type = 'button';
                     btn.className = 'nav-item-btn' + (currentCategory === c.id ? ' active' : '');
                     btn.setAttribute('data-category', c.id);
+                    btn.title = c.name;
                     btn.id = 'cat-filter-' + c.id;
                     var dot = document.createElement('span');
                     dot.className = 'category-dot';
@@ -2066,6 +2135,11 @@
                     App.persistTasks();
                 });
 
+                makeSubtaskEditable(row.querySelector('.subtask-title-text'), st, function(changed) {
+                    App.renderEditSubtasks(task);
+                    if (changed) { SoundFX.play('pop'); App.persistTasks(); }
+                });
+
                 row.querySelector('.subtask-delete-btn').addEventListener('click', function() {
                     subtasks.splice(index, 1);
                     SoundFX.play('delete');
@@ -2385,6 +2459,9 @@
                             if (st.completed && allDone && !task.completed) {
                                 showToast('Checklist complete', 'success', { label: 'Complete task', fn: function() { App.toggleTaskComplete(task.id); } });
                             }
+                        });
+                        makeSubtaskEditable(row.querySelector('.subtask-title-text'), st, function(changed) {
+                            if (changed) { SoundFX.play('pop'); App.persistTasks(); } else App.renderTaskList();
                         });
                         row.querySelector('.subtask-delete-btn').addEventListener('click', function() {
                             task.subtasks = task.subtasks.filter(function(x) { return x !== st; });

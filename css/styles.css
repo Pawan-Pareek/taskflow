@@ -735,3 +735,37 @@ input[data-label]:not(.is-empty)::before, input[data-label].is-empty:focus::befo
     #quick-remind-field .rp-clear { flex: 0 0 auto; width: 40px; }
     .field-stack .quick-date-picker { width: 100%; }
 }
+
+/* Checklist items can be edited in place */
+.subtask-title-text.editable { cursor: text; border-radius: var(--radius-sm); }
+.subtask-title-text.editable:hover { background: var(--surface-2); }
+.subtask-title-text.editable:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.subtask-edit-input { flex: 1; min-width: 0; height: 34px; padding: 0 8px; font-size: 0.93rem; }
+
+/* Sidebar toggle (laptop): full sidebar <-> icon strip */
+.sidebar-toggle { margin-left: auto; flex-shrink: 0; color: var(--muted); }
+.sidebar-toggle .icon { transition: transform 200ms var(--ease); }
+@media (max-width: 768px) { .sidebar-toggle { display: none; } }
+@media (min-width: 769px) {
+    .sidebar { transition: width 200ms var(--ease), padding 200ms var(--ease); }
+    .sidebar-collapsed .sidebar { width: 68px; padding-left: 10px; padding-right: 10px; }
+    .sidebar-collapsed .sidebar-toggle .icon { transform: rotate(180deg); }
+    .sidebar-collapsed .brand-section { flex-direction: column; gap: 10px; padding: 0 0 14px; }
+    .sidebar-collapsed .brand-name,
+    .sidebar-collapsed .user-info,
+    .sidebar-collapsed .nav-label,
+    .sidebar-collapsed .nav-badge-count,
+    .sidebar-collapsed .nav-rename-btn,
+    .sidebar-collapsed .daily-progress-card,
+    .sidebar-collapsed .nav-add-btn span { display: none; }
+    .sidebar-collapsed .sidebar-toggle { margin-left: 0; }
+    .sidebar-collapsed .user-profile-card { justify-content: center; padding: 10px 0; }
+    .sidebar-collapsed .nav-group-title { font-size: 0; height: 1px; padding: 0; margin: 12px 8px; background: var(--border); }
+    .sidebar-collapsed .nav-group-title > * { display: none; }
+    .sidebar-collapsed .nav-item-btn,
+    .sidebar-collapsed .nav-add-btn { justify-content: center; padding: 0; gap: 0; }
+    .sidebar-collapsed .nav-icon { margin: 0; }
+    .sidebar-collapsed .category-dot { margin: 0; width: 11px; height: 11px; }
+    .sidebar-collapsed .nav-custom-row { display: block; }
+}
+@media (prefers-reduced-motion: reduce) { .sidebar { transition: none; } }
