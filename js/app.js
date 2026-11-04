@@ -2016,6 +2016,14 @@
         // Add the next occurrence of a recurring task (same details, fresh checklist, shifted reminder)
         spawnNextOccurrence: function(task) {
             var nextDue = nextRecurDue(task, this.getTodayStr());
+            // The link to the copy made earlier is not saved to the cloud, so after a reload (or on another device)
+            // completing the same task again would add a second copy. If this series already has an open task
+            // for that day, use it instead of adding another.
+            var existing = tasks.find(function(t) {
+                return t.id !== task.id && !t.completed && isDated(t) && t.dueDate === nextDue &&
+                    t.repeat === task.repeat && t.title === task.title && t.category === task.category;
+            });
+            if (existing) return existing;
             var copy = {
                 id: 'task_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
                 type: 'daily',
