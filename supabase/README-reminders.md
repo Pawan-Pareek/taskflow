@@ -75,3 +75,14 @@ supabase functions deploy send-notification-alerts --use-api
 
 Use **Send test** in the alert editor to check it. Logs: Supabase dashboard -> Edge Functions ->
 send-notification-alerts -> Logs.
+
+## Weekly and monthly summary
+
+The app shows a summary under **Review** in the menu, and a short review pop-up the first time it is
+opened after a week or month ends. With notifications on, the phone also gets the summary at 8 pm
+(in the user's own time zone) on Sundays and on the last day of each month.
+
+1. SQL Editor: run all of `supabase/setup-summaries.sql` (adds `completed_at`, the summary setting, a send log, and a job every 10 minutes).
+2. Deploy: `supabase functions deploy send-summaries --use-api`
+3. The counting rules live in `js/summary.js`. After editing it, run `node scripts/sync-summary.js`
+   (the server uses a copy) and `node scripts/test-summary.js`.

@@ -54,6 +54,7 @@
             <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
             <symbol id="i-repeat" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M8 16H3v5"/></symbol>
             <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11Z"/></symbol>
+            <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M8 17v-5M13 17V8M18 17v-9"/></symbol>
         </defs>
     </svg>
 
@@ -111,6 +112,16 @@
             </ul>
             <ul class="nav-list" id="custom-list-nav"></ul>
             <button type="button" class="nav-add-btn" id="btn-add-list"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg><span>New list</span></button>
+
+            <div class="nav-group-title">Review</div>
+            <ul class="nav-list">
+                <li><button type="button" class="nav-item-btn" data-filter="summary-week" id="nav-filter-summary-week">
+                    <svg class="icon nav-icon" aria-hidden="true"><use href="#i-chart"/></svg>
+                    <span class="nav-label">Weekly summary</span></button></li>
+                <li><button type="button" class="nav-item-btn" data-filter="summary-month" id="nav-filter-summary-month">
+                    <svg class="icon nav-icon" aria-hidden="true"><use href="#i-calendar"/></svg>
+                    <span class="nav-label">Monthly summary</span></button></li>
+            </ul>
 
             <div class="nav-group-title nav-group-row"><span>Categories</span>
                 <button type="button" class="icon-btn nav-rename-btn" id="btn-manage-categories" title="Edit categories" aria-label="Edit categories">
@@ -202,6 +213,8 @@
                 </button>
                 <button type="button" id="btn-period-current" class="btn-period-current hidden">This week</button>
             </div>
+
+            <section id="summary-view" class="summary-view" aria-live="polite"></section>
 
             <!-- Add task -->
             <section class="quick-add-card" aria-label="Add a task">
@@ -470,6 +483,22 @@
         </div>
     </div>
 
+    <!-- End of week / month review -->
+    <div id="review-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="review-title">
+        <div class="modal-card review-card">
+            <button type="button" id="btn-close-review" class="modal-close-btn" aria-label="Close"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+            <p class="review-period" id="review-period"></p>
+            <h3 id="review-title"></h3>
+            <p class="review-line" id="review-line"></p>
+            <div class="meter" aria-hidden="true"><div class="meter-fill" id="review-meter-fill"></div><span class="meter-target"></span></div>
+            <p class="review-message" id="review-message"></p>
+            <div class="modal-actions review-actions">
+                <button type="button" id="btn-review-later" class="btn btn-secondary">Close</button>
+                <button type="button" id="btn-review-details" class="btn btn-primary">See details</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Settings -->
     <div id="settings-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="settings-heading">
         <div class="modal-card">
@@ -503,6 +532,15 @@
                     <button type="button" class="chip-btn" data-preset="morning">Morning nudge</button>
                     <button type="button" class="chip-btn" data-preset="night">Night summary</button>
                 </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="section-head">
+                    <h4>Weekly and monthly summary</h4>
+                    <label class="switch" title="Summary notifications"><input type="checkbox" id="summary-push-toggle" aria-label="Send weekly and monthly summary notifications"><span class="switch-track"></span></label>
+                </div>
+                <p class="section-desc">On Sunday evening and on the last day of each month, around 8 pm, get a notification with how much you finished. You can always see it under Review in the menu.</p>
+                <p id="summary-push-hint" class="remind-hint"></p>
             </div>
 
             <div class="settings-section">
@@ -600,6 +638,7 @@
     <script src="js/api.js"></script>
     <script src="js/push.js"></script>
     <script src="js/auth.js"></script>
+    <script src="js/summary.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>

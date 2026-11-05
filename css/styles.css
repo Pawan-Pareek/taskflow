@@ -770,3 +770,72 @@ input[data-label]:not(.is-empty)::before, input[data-label].is-empty:focus::befo
     .sidebar-collapsed .nav-custom-row { display: block; }
 }
 @media (prefers-reduced-motion: reduce) { .sidebar { transition: none; } }
+
+/* ==========================================================================
+   Weekly / monthly summary
+   ========================================================================== */
+.summary-view { display: none; }
+body.summary-mode .summary-view { display: block; }
+body.summary-mode .quick-add-card,
+body.summary-mode #task-list,
+body.summary-mode .view-tools { display: none; }
+
+.summary-head { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 18px; box-shadow: var(--shadow-sm); }
+.summary-chip { display: inline-block; font-size: 0.78rem; font-weight: 600; padding: 2px 10px; border-radius: var(--radius-full); background: var(--surface-2); color: var(--text-2); }
+.tier-cheer .summary-chip { background: rgba(26, 127, 75, 0.12); color: var(--success); }
+.tier-nudge .summary-chip { background: var(--warn-soft); color: var(--warn); }
+.tier-low .summary-chip { background: var(--accent-soft); color: var(--accent-text); }
+.summary-line { font-size: 1.25rem; margin: 10px 0 12px; font-variant-numeric: tabular-nums; }
+.summary-message { font-size: 0.95rem; color: var(--text-2); line-height: 1.55; max-width: 60ch; }
+
+/* progress meter with the 80% target marked */
+.meter { position: relative; height: 8px; border-radius: var(--radius-full); background: var(--surface-2); margin-bottom: 12px; }
+.meter-fill { height: 100%; width: 0; border-radius: inherit; background: var(--accent); transition: width 400ms var(--ease); }
+.tier-cheer .meter-fill { background: var(--success); }
+.meter-target { position: absolute; left: 80%; top: -4px; bottom: -4px; width: 2px; background: var(--text-2); border-radius: 1px; }
+
+.summary-section { margin-top: 20px; }
+.summary-section h4 { font-size: 0.95rem; margin-bottom: 10px; }
+.summary-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.summary-legend { font-size: 0.78rem; color: var(--muted); }
+
+.summary-chart { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 12px 12px; }
+.summary-chart.is-month { grid-template-columns: repeat(auto-fit, minmax(48px, 1fr)); }
+.sum-col { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
+.sum-val { font-size: 0.78rem; font-weight: 600; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.sum-bar { position: relative; width: 100%; max-width: 40px; height: 120px; background: var(--surface-2); border-radius: 6px; display: flex; align-items: flex-end; overflow: hidden; }
+.sum-bar::after { content: ""; position: absolute; left: 0; right: 0; bottom: 80%; border-top: 1px dashed var(--border-strong); }
+.sum-fill { width: 100%; background: var(--accent); border-radius: 6px 6px 0 0; transition: height 400ms var(--ease); }
+.sum-fill.is-met { background: var(--success); }
+.sum-col.is-future .sum-bar { background: transparent; border: 1px dashed var(--border); }
+.sum-label { font-size: 0.8rem; color: var(--muted); }
+.sum-col.is-current .sum-label { color: var(--accent-text); font-weight: 700; }
+.sum-sub { font-size: 0.72rem; color: var(--muted); text-align: center; line-height: 1.2; }
+
+.summary-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; margin-top: 20px; background: var(--border); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+.summary-fact { background: var(--surface); padding: 12px 14px; }
+.summary-fact dt { font-size: 0.78rem; color: var(--muted); }
+.summary-fact dd { font-size: 0.95rem; font-weight: 600; margin-top: 2px; }
+
+.summary-open { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+.summary-open li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 11px 14px; border-bottom: 1px solid var(--border); cursor: pointer; font-size: 0.93rem; }
+.summary-open li:last-child { border-bottom: none; }
+.summary-open li:hover { background: var(--surface-2); }
+.summary-open-title { min-width: 0; overflow-wrap: anywhere; }
+.summary-open-date { flex-shrink: 0; font-size: 0.8rem; color: var(--muted); }
+.summary-note { margin-top: 18px; font-size: 0.8rem; color: var(--muted); }
+
+/* end-of-period review dialog */
+.review-card { max-width: 420px; }
+.review-period { font-size: 0.82rem; color: var(--muted); padding-right: 36px; }
+.review-card h3 { margin: 4px 0 6px; }
+.review-card.tier-cheer h3 { color: var(--success); }
+.review-line { font-weight: 600; margin-bottom: 12px; font-variant-numeric: tabular-nums; }
+.review-message { color: var(--text-2); line-height: 1.55; }
+.review-actions { justify-content: flex-end; }
+
+@media (max-width: 560px) {
+    .summary-chart { gap: 4px; padding: 12px 8px 10px; }
+    .sum-bar { height: 100px; }
+    .summary-line { font-size: 1.1rem; }
+}

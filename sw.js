@@ -1,4 +1,4 @@
-const CACHE_NAME = 'taskflow-pro-v5'; // v2: drops v1 entries, which also held cached cloud (Supabase) responses
+const CACHE_NAME = 'taskflow-pro-v6'; // v2: drops v1 entries, which also held cached cloud (Supabase) responses
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
@@ -8,6 +8,7 @@ const ASSETS_TO_CACHE = [
     './js/confetti.js',
     './js/api.js',
     './js/auth.js',
+    './js/summary.js',
     './js/app.js',
     './favicon.png',
     './icons/icon.png',
@@ -88,7 +89,10 @@ self.addEventListener('notificationclick', (event) => {
     event.waitUntil(
         self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((wins) => {
             for (const w of wins) {
-                if ('focus' in w) return w.focus();
+                if ('focus' in w) {
+                    // A link to a task or summary is followed; a plain alert just brings the app forward
+                    return w.focus().then((fw) => (target !== '/' && fw && 'navigate' in fw) ? fw.navigate(target) : fw);
+                }
             }
             return self.clients.openWindow(target);
         })

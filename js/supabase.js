@@ -27,6 +27,8 @@
             remind_at: t.remindAt || null,
             due_date: t.dueDate || null,
             completed: !!t.completed,
+            // when it was finished: the weekly / monthly summary counts tasks on the day they were done
+            completed_at: t.completed ? (t.completedAt || null) : null,
             starred: !!t.starred,
             subtasks: t.subtasks || []
         };
@@ -266,6 +268,7 @@
                     reminded: !!row.reminded,
                     dueDate: row.due_date || '',
                     completed: !!row.completed,
+                    completedAt: row.completed_at || undefined,
                     starred: !!row.starred,
                     subtasks: Array.isArray(row.subtasks) ? row.subtasks : (typeof row.subtasks === 'string' ? JSON.parse(row.subtasks || '[]') : []),
                     createdAt: row.created_at
@@ -290,7 +293,7 @@
             rows = changed;
 
             var res = await c.from('todos').upsert(rows, { onConflict: 'id' });
-            if (res.error && /goal_type|remind_at|reminded|repeat_rule|repeat_day/.test(res.error.message || '')) {
+            if (res.error && /goal_type|remind_at|reminded|repeat_rule|repeat_day|completed_at/.test(res.error.message || '')) {
                 // Optional columns not created yet: save without them so sync keeps working
                 console.warn('Supabase: run supabase/setup-reminders.sql to add goal_type / remind_at / reminded.');
                 if (!window._goalTypeWarned && window.showToast) {
@@ -298,7 +301,7 @@
                     window.showToast('Goals and reminders are saved on this device only. Run the SQL setup in Supabase to sync them (see Settings).', 'info');
                 }
                 res = await c.from('todos').upsert(rows.map(function(r) {
-                    delete r.goal_type; delete r.remind_at; delete r.reminded; delete r.repeat_rule; delete r.repeat_day; return r;
+                    delete r.goal_type; delete r.remind_at; delete r.reminded; delete r.repeat_rule; delete r.repeat_day; delete r.completed_at; return r;
                 }), { onConflict: 'id' });
             }
             if (!res.error) {
@@ -389,6 +392,34 @@
             }, { onConflict: 'user_id' });
             if (res.error) {
                 console.warn('Supabase saveCategories warning (run supabase/setup-reminders.sql):', res.error);
+                return false;
+            }
+            return true;
+        },
+
+        // Weekly / monthly summary notifications: { enabled, tz } on the user_settings row.
+        // null = unavailable (column not added yet), {} = nothing saved yet
+        getSummaryPrefs: async function(userId) {
+            var c = this.getClient();
+            if (!c || !userId) return null;
+            var res = await c.from('user_settings').select('summary_prefs').eq('user_id', userId).maybeSingle();
+            if (res.error) {
+                console.warn('Supabase getSummaryPrefs warning (run supabase/setup-summaries.sql):', res.error);
+                return null;
+            }
+            return (res.data && res.data.summary_prefs) || {};
+        },
+
+        saveSummaryPrefs: async function(userId, prefs) {
+            var c = this.getClient();
+            if (!c || !userId) return false;
+            var res = await c.from('user_settings').upsert({
+                user_id: userId,
+                summary_prefs: prefs,
+                updated_at: new Date().toISOString()
+            }, { onConflict: 'user_id' });
+            if (res.error) {
+                console.warn('Supabase saveSummaryPrefs warning (run supabase/setup-summaries.sql):', res.error);
                 return false;
             }
             return true;

@@ -39,6 +39,11 @@
     function isCustom(t) { return t.type === 'custom'; }
     function isDated(t) { return !isGoal(t) && !isCustom(t); }
 
+    // Review views: 'summary-week' / 'summary-month' -> 'week' / 'month' ('' for every other view)
+    function summaryKindOf(filter) { return filter === 'summary-week' ? 'week' : (filter === 'summary-month' ? 'month' : ''); }
+    var REVIEW_SEEN_KEY = 'taskflow_review_seen'; // last week / month whose review pop-up was shown
+    function deviceTz() { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { return ''; } }
+
     // Recurring tasks: completing one adds the next occurrence
     var REPEAT_LABELS = { daily: 'Every day', weekdays: 'Every weekday', weekly: 'Every week', monthly: 'Every month' };
     function nextOccurrence(rule, from, day) {
@@ -406,6 +411,7 @@
     }
     var expandedTasks = {};   // task id -> its checklist is open on the card
     var openSwipe = null;     // the task row currently slid open by a swipe
+    var summaryPrefs;         // { enabled, tz } from the cloud; null = not available, undefined = not loaded yet
 
     var App = {
         init: async function() {
@@ -434,6 +440,7 @@
             this.setupNotifAlerts();
             this.setupHaptics();
             this.setupSidebarToggle();
+            this.setupSummary();
 
             // Check server and update status indicator
             this.checkSyncStatus();
@@ -455,6 +462,7 @@
                 if (now !== lastDay) {
                     lastDay = now;
                     App.render();
+                    App.checkPeriodReview(); // a new week or month may have started
                 }
             };
             setInterval(checkNewDay, 60000);
@@ -472,9 +480,19 @@
             if (TaskAPI.getCurrentUser()) {
                 await this.loadTasks();
                 // Opened from a reminder notification: show that task
-                var openId = new URLSearchParams(window.location.search).get('task');
+                var params = new URLSearchParams(window.location.search);
+                var openId = params.get('task');
                 if (openId && tasks.some(function(t) { return t.id === openId; })) {
                     this.openEditModal(openId);
+                    history.replaceState(null, '', window.location.pathname);
+                }
+                // Opened from a weekly / monthly summary notification: show that summary
+                var openView = params.get('view');
+                if (openView === 'summary-week' || openView === 'summary-month') {
+                    var rv = document.getElementById('review-modal');
+                    if (rv) rv.classList.add('hidden'); // the notification already said it
+                    this._reviewQueue = [];
+                    this.setFilter(openView);
                     history.replaceState(null, '', window.location.pathname);
                 }
             }
@@ -531,6 +549,8 @@
                 this.render();
                 this.syncCustomLists();
                 this.syncCategories();
+                this.syncSummaryPrefs();
+                this.checkPeriodReview();
 
                 // Heal the cloud copy if goal types had to be restored from this device
                 if (typesRestored) {
@@ -717,7 +737,7 @@
             // Week / month navigation for the goal views
             function shiftPeriod(dir) {
                 var d = parseDate(selectedDate || self.getTodayStr());
-                if (currentFilter === 'monthly') d = new Date(d.getFullYear(), d.getMonth() + dir, 1);
+                if (currentFilter === 'monthly' || currentFilter === 'summary-month') d = new Date(d.getFullYear(), d.getMonth() + dir, 1);
                 else d.setDate(d.getDate() + 7 * dir);
                 selectedDate = fmtDate(d);
                 if (dateFilterInput) dateFilterInput.value = selectedDate;
@@ -1896,26 +1916,33 @@
                     monthly: 'Monthly goals',
                     custom: listName(currentList),
                     starred: 'Starred',
-                    completed: 'Completed'
+                    completed: 'Completed',
+                    'summary-week': 'Weekly summary',
+                    'summary-month': 'Monthly summary'
                 };
                 if (titleEl) titleEl.textContent = titles[currentFilter] || 'Tasks';
             }
+
+            // The summary views replace the task list and the add-task card
+            var summaryKind = currentCategory === 'all' ? summaryKindOf(currentFilter) : '';
+            document.body.classList.toggle('summary-mode', !!summaryKind);
 
             // A list with no dates has nothing for the date filter to act on
             var dateFilterBox = document.querySelector('.date-filter-container');
             if (dateFilterBox) dateFilterBox.classList.toggle('hidden', currentCategory === 'all' && currentFilter === 'custom');
 
             var periodNav = document.getElementById('period-nav');
-            var inGoalView = currentCategory === 'all' && (currentFilter === 'weekly' || currentFilter === 'monthly');
+            var periodType = summaryKind ? (summaryKind === 'month' ? 'monthly' : 'weekly') : currentFilter;
+            var inGoalView = currentCategory === 'all' && (periodType === 'weekly' || periodType === 'monthly');
             if (periodNav) periodNav.classList.toggle('hidden', !inGoalView);
             if (inGoalView) {
                 var viewDate = selectedDate || this.getTodayStr();
-                var isCurrent = periodEnd(currentFilter, viewDate) === periodEnd(currentFilter, this.getTodayStr());
+                var isCurrent = periodEnd(periodType, viewDate) === periodEnd(periodType, this.getTodayStr());
                 var labelEl = document.getElementById('period-nav-label');
-                if (labelEl) labelEl.textContent = periodLabel(currentFilter, viewDate) + (isCurrent ? ' (current)' : '');
+                if (labelEl) labelEl.textContent = periodLabel(periodType, viewDate) + (isCurrent ? ' (current)' : '');
                 var curBtn = document.getElementById('btn-period-current');
                 if (curBtn) {
-                    curBtn.textContent = currentFilter === 'monthly' ? 'This month' : 'This week';
+                    curBtn.textContent = periodType === 'monthly' ? 'This month' : 'This week';
                     curBtn.classList.toggle('hidden', isCurrent);
                 }
             }
@@ -2355,7 +2382,240 @@
             return 0;
         },
 
+        // ---- Weekly / monthly summary (logic in js/summary.js) ----
+        renderSummary: function() {
+            var box = document.getElementById('summary-view');
+            if (!box || !window.TaskSummary) return;
+            var kind = summaryKindOf(currentFilter);
+            var noun = kind === 'month' ? 'month' : 'week';
+            var today = this.getTodayStr();
+            var s = TaskSummary.buildSummary(tasks, kind, selectedDate || today, { today: today });
+            var d = TaskSummary.describe(s);
+            var FULL_DAYS = { Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday', Thu: 'Thursday', Fri: 'Friday', Sat: 'Saturday', Sun: 'Sunday' };
+            function el(tag, cls, text) {
+                var e = document.createElement(tag);
+                if (cls) e.className = cls;
+                if (text !== undefined) e.textContent = text;
+                return e;
+            }
+            box.innerHTML = '';
+
+            // Headline: what happened, how far from the 80% target, and what to do next
+            var head = el('div', 'summary-head tier-' + (s.isFuture ? 'none' : d.tier));
+            if (s.isFuture) {
+                head.appendChild(el('span', 'summary-chip', 'Not started'));
+                head.appendChild(el('h3', 'summary-line', s.planned ? s.planned + ' task' + (s.planned === 1 ? '' : 's') + ' planned' : 'Nothing planned yet'));
+                head.appendChild(el('p', 'summary-message', 'This ' + noun + ' has not started yet.'));
+            } else {
+                head.appendChild(el('span', 'summary-chip', d.headline));
+                head.appendChild(el('h3', 'summary-line', d.line || 'No tasks planned this ' + noun));
+                if (s.planned > 0) {
+                    var meter = el('div', 'meter');
+                    meter.setAttribute('aria-hidden', 'true');
+                    var fill = el('div', 'meter-fill');
+                    fill.style.width = s.pct + '%';
+                    meter.appendChild(fill);
+                    meter.appendChild(el('span', 'meter-target'));
+                    head.appendChild(meter);
+                }
+                head.appendChild(el('p', 'summary-message', d.message));
+            }
+            box.appendChild(head);
+
+            // Bars: each day of the week, or each week of the month
+            var chartBox = el('div', 'summary-section');
+            var chartHead = el('div', 'summary-section-head');
+            chartHead.appendChild(el('h4', '', kind === 'month' ? 'Week by week' : 'Day by day'));
+            chartHead.appendChild(el('span', 'summary-legend', 'Line marks the ' + TaskSummary.TARGET + '% target'));
+            chartBox.appendChild(chartHead);
+            var chart = el('div', 'summary-chart' + (kind === 'month' ? ' is-month' : ''));
+            chart.setAttribute('role', 'list');
+            s.items.forEach(function(it) {
+                var col = el('div', 'sum-col' + (it.current ? ' is-current' : '') + (it.future ? ' is-future' : ''));
+                col.setAttribute('role', 'listitem');
+                var name = kind === 'week' ? FULL_DAYS[it.label] : it.label + ', ' + it.sub;
+                col.setAttribute('aria-label', name + ': ' + (it.planned ? it.done + ' of ' + it.planned + ' done' : 'no tasks'));
+                col.appendChild(el('div', 'sum-val', it.planned ? it.done + '/' + it.planned : '-'));
+                var bar = el('div', 'sum-bar');
+                var barFill = el('div', 'sum-fill' + (it.pct !== null && it.pct >= TaskSummary.TARGET ? ' is-met' : ''));
+                barFill.style.height = (it.pct || 0) + '%';
+                bar.appendChild(barFill);
+                col.appendChild(bar);
+                col.appendChild(el('div', 'sum-label', it.label));
+                if (it.sub) col.appendChild(el('div', 'sum-sub', it.sub));
+                chart.appendChild(col);
+            });
+            chartBox.appendChild(chart);
+            box.appendChild(chartBox);
+
+            // A few plain facts
+            var facts = el('dl', 'summary-facts');
+            function fact(label, value) {
+                var row = el('div', 'summary-fact');
+                row.appendChild(el('dt', '', label));
+                row.appendChild(el('dd', '', value));
+                facts.appendChild(row);
+            }
+            var bestText = 'None yet';
+            if (s.best) bestText = (kind === 'week' ? FULL_DAYS[s.best.label] : s.best.label + ' (' + s.best.sub + ')') + ', ' + s.best.done + ' done';
+            fact(kind === 'week' ? 'Best day' : 'Best week', bestText);
+            fact('Goals', s.goalsPlanned ? s.goalsDone + ' of ' + s.goalsPlanned + ' done' : 'None set');
+            fact('Still open', String(s.carried.length));
+            if (s.inProgress && s.planned > 0) fact('To reach ' + TaskSummary.TARGET + '%', s.needMore ? s.needMore + ' more' : 'Reached');
+            box.appendChild(facts);
+
+            // What is still open from this period
+            if (s.carried.length) {
+                var openBox = el('div', 'summary-section');
+                openBox.appendChild(el('h4', '', 'Still open'));
+                var list = el('ul', 'summary-open');
+                s.carried.slice(0, 8).forEach(function(t) {
+                    var li = el('li');
+                    li.appendChild(el('span', 'summary-open-title', t.title));
+                    var when = isGoal(t) ? (t.type === 'monthly' ? 'Monthly goal' : 'Weekly goal') : shortDate(t.dueDate);
+                    li.appendChild(el('span', 'summary-open-date', when));
+                    li.addEventListener('click', function() { App.openEditModal(t.id); });
+                    list.appendChild(li);
+                });
+                openBox.appendChild(list);
+                if (s.carried.length > 8) openBox.appendChild(el('p', 'remind-hint', '+' + (s.carried.length - 8) + ' more'));
+                box.appendChild(openBox);
+            }
+
+            box.appendChild(el('p', 'summary-note', 'Tasks count on the day you finish them. Tasks on your own lists are not included.'));
+        },
+
+        // When a week or month has ended, show its review once (the next time the app is opened)
+        checkPeriodReview: function() {
+            if (!window.TaskSummary || !TaskAPI.getCurrentUser() || !tasks.length) return;
+            var D = TaskSummary.dates;
+            var today = this.getTodayStr();
+            var seen = {};
+            try { seen = JSON.parse(storeGet(REVIEW_SEEN_KEY) || '{}') || {}; } catch (e) {}
+            var lastWeek = D.addDays(D.weekStart(today), -7);
+            var lastMonth = D.monthStart(D.addDays(D.monthStart(today), -1));
+            var queue = [];
+            if (seen.month !== lastMonth) {
+                seen.month = lastMonth;
+                var m = TaskSummary.buildSummary(tasks, 'month', lastMonth, { today: today });
+                if (m.planned > 0) queue.push(m);
+            }
+            if (seen.week !== lastWeek) {
+                seen.week = lastWeek;
+                var w = TaskSummary.buildSummary(tasks, 'week', lastWeek, { today: today });
+                if (w.planned > 0) queue.push(w);
+            }
+            storeSet(REVIEW_SEEN_KEY, JSON.stringify(seen));
+            this._reviewQueue = queue;
+            if (queue.length) this.showNextReview();
+        },
+
+        showNextReview: function() {
+            var s = (this._reviewQueue || []).shift();
+            var modal = document.getElementById('review-modal');
+            if (!s || !modal) return;
+            var d = TaskSummary.describe(s);
+            var set = function(id, text) { var e = document.getElementById(id); if (e) e.textContent = text; };
+            set('review-period', (s.kind === 'month' ? 'Your month in review, ' : 'Your week in review, ') + s.label);
+            set('review-title', d.headline);
+            set('review-line', d.line);
+            set('review-message', d.message);
+            var fill = document.getElementById('review-meter-fill');
+            if (fill) fill.style.width = (s.pct || 0) + '%';
+            var card = modal.querySelector('.review-card');
+            if (card) card.className = 'modal-card review-card tier-' + d.tier;
+            modal.setAttribute('data-kind', s.kind);
+            modal.setAttribute('data-anchor', s.start);
+            modal.classList.remove('hidden');
+            if (d.tier === 'cheer') {
+                Haptics.celebrate();
+                SoundFX.play('fanfare');
+                try { if (window.Confetti && !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) Confetti.burst(); } catch (e) {}
+            } else {
+                SoundFX.play('pop');
+            }
+        },
+
+        setupSummary: function() {
+            var modal = document.getElementById('review-modal');
+            var close = function() {
+                if (!modal) return;
+                modal.classList.add('hidden');
+                setTimeout(function() { App.showNextReview(); }, 250); // a month review can be followed by the week's
+            };
+            ['btn-close-review', 'btn-review-later'].forEach(function(id) {
+                var b = document.getElementById(id);
+                if (b) b.addEventListener('click', close);
+            });
+            var details = document.getElementById('btn-review-details');
+            if (details) {
+                details.addEventListener('click', function() {
+                    modal.classList.add('hidden');
+                    App._reviewQueue = [];
+                    selectedDate = modal.getAttribute('data-anchor') || '';
+                    var dateIn = document.getElementById('date-filter-input');
+                    if (dateIn) dateIn.value = selectedDate;
+                    App.setFilter(modal.getAttribute('data-kind') === 'month' ? 'summary-month' : 'summary-week');
+                    App.render();
+                });
+            }
+
+            // Settings switch: weekly / monthly summary notifications
+            var box = document.getElementById('summary-push-toggle');
+            if (box) {
+                box.addEventListener('change', async function() {
+                    var u = TaskAPI.getCurrentUser();
+                    var prefs = { enabled: box.checked, tz: deviceTz() };
+                    var ok = u && window.TaskSupabase && TaskSupabase.isEnabled() && await TaskSupabase.saveSummaryPrefs(u.id, prefs);
+                    if (!ok) {
+                        box.checked = !box.checked;
+                        showToast('Could not save the setting. Check your connection and try again.', 'info');
+                        return;
+                    }
+                    summaryPrefs = prefs;
+                    Haptics.tap();
+                    App.updateSummarySetting();
+                    showToast(box.checked ? 'Summary notifications on' : 'Summary notifications off', 'info');
+                });
+            }
+            var settingsBtn = document.getElementById('btn-open-settings');
+            if (settingsBtn) settingsBtn.addEventListener('click', function() { App.updateSummarySetting(); });
+        },
+
+        // Keep the server's copy of this user's time zone current, so the summary arrives at 8 pm local time
+        syncSummaryPrefs: async function() {
+            var u = TaskAPI.getCurrentUser();
+            if (!u || !window.TaskSupabase || !TaskSupabase.isEnabled()) { summaryPrefs = null; this.updateSummarySetting(); return; }
+            var p = await TaskSupabase.getSummaryPrefs(u.id);
+            if (p) {
+                var tz = deviceTz();
+                var enabled = p.enabled !== false; // on unless the user turned it off
+                if (tz && (p.tz !== tz || p.enabled === undefined)) {
+                    p = { enabled: enabled, tz: tz };
+                    TaskSupabase.saveSummaryPrefs(u.id, p);
+                }
+            }
+            summaryPrefs = p;
+            this.updateSummarySetting();
+        },
+
+        updateSummarySetting: function() {
+            var box = document.getElementById('summary-push-toggle');
+            var hint = document.getElementById('summary-push-hint');
+            if (!box) return;
+            var section = box.closest('.settings-section');
+            // Hidden until the cloud side is set up (the in-app summary still works)
+            if (section) section.classList.toggle('hidden', summaryPrefs === null);
+            if (!summaryPrefs) return;
+            box.checked = summaryPrefs.enabled !== false;
+            if (hint) {
+                var pushOn = window.TaskPush && TaskPush.isOn();
+                hint.textContent = box.checked && !pushOn ? 'Turn on notifications above to get it on this device.' : '';
+            }
+        },
+
         renderTaskList: function() {
+            if (currentCategory === 'all' && summaryKindOf(currentFilter)) { this.renderSummary(); return; }
             var container = document.getElementById('task-list');
             if (!container) return;
             container.innerHTML = '';
