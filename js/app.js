@@ -2422,6 +2422,9 @@
             }
             box.appendChild(head);
 
+            // Line chart: completion and on-time rate over the last 12 weeks / months
+            this.renderTrend(box, kind, selectedDate || today, today);
+
             // Bars: each day of the week, or each week of the month
             var chartBox = el('div', 'summary-section');
             var chartHead = el('div', 'summary-section-head');
@@ -2483,6 +2486,130 @@
             }
 
             box.appendChild(el('p', 'summary-note', 'Tasks count on the day you finish them. Tasks on your own lists are not included.'));
+        },
+
+        // Percentages, not task counts: the number of tasks changes from week to week, the share finished is comparable.
+        // Empty periods are gaps; the running period is drawn faded because it is not finished yet.
+        renderTrend: function(box, kind, anchor, today) {
+            var tr = TaskSummary.buildTrend(tasks, kind, anchor, { today: today }, 12);
+            var change = TaskSummary.describeTrend(tr);
+            var pts = tr.points;
+            var n = pts.length;
+            var NS = 'http://www.w3.org/2000/svg';
+            function el(tag, cls, text) {
+                var e = document.createElement(tag);
+                if (cls) e.className = cls;
+                if (text !== undefined) e.textContent = text;
+                return e;
+            }
+            function xOf(i) { return n === 1 ? 50 : 3 + (i / (n - 1)) * 94; }
+            function yOf(v) { return 100 - v; }
+
+            var sec = el('div', 'summary-section trend');
+            var head = el('div', 'summary-section-head');
+            head.appendChild(el('h4', '', 'Progress over the last 12 ' + (kind === 'month' ? 'months' : 'weeks')));
+            head.appendChild(el('span', 'trend-chip is-' + change.direction, change.text));
+            sec.appendChild(head);
+            var legend = el('div', 'trend-legend');
+            legend.appendChild(el('span', 'lg-done', 'Completed'));
+            legend.appendChild(el('span', 'lg-ontime', 'On time'));
+            legend.appendChild(el('span', 'lg-target', TaskSummary.TARGET + '% target'));
+            sec.appendChild(legend);
+
+            var card = el('div', 'trend-card');
+            var plot = el('div', 'trend-plot');
+            var yAxis = el('div', 'trend-y');
+            yAxis.setAttribute('aria-hidden', 'true');
+            [100, TaskSummary.TARGET, 50, 0].forEach(function(v) {
+                var l = el('span', '', v + '%');
+                l.style.top = yOf(v) + '%';
+                yAxis.appendChild(l);
+            });
+            plot.appendChild(yAxis);
+
+            var area = el('div', 'trend-area');
+            // tap a week / month to open its summary
+            var stepW = n > 1 ? 94 / (n - 1) : 20;
+            pts.forEach(function(p, i) {
+                if (p.isFuture) return;
+                var hit = el('button', 'trend-hit' + (i === n - 1 ? ' is-active' : ''));
+                hit.type = 'button';
+                hit.style.left = xOf(i) + '%';
+                hit.style.width = stepW + '%';
+                var desc = p.pct === null ? 'nothing planned' : p.pct + '% completed' + (p.onTimePct !== null ? ', ' + p.onTimePct + '% on time' : '');
+                hit.setAttribute('aria-label', p.longLabel + ': ' + desc + (p.inProgress ? ' so far' : ''));
+                hit.title = p.longLabel + ': ' + desc;
+                hit.addEventListener('click', function() {
+                    selectedDate = p.start;
+                    var dateIn = document.getElementById('date-filter-input');
+                    if (dateIn) dateIn.value = selectedDate;
+                    Haptics.tick();
+                    App.render();
+                });
+                area.appendChild(hit);
+            });
+
+            var svg = document.createElementNS(NS, 'svg');
+            svg.setAttribute('viewBox', '0 0 100 100');
+            svg.setAttribute('preserveAspectRatio', 'none');
+            svg.setAttribute('aria-hidden', 'true');
+            svg.setAttribute('class', 'trend-svg');
+            function hline(y, cls) {
+                var l = document.createElementNS(NS, 'line');
+                l.setAttribute('x1', 0); l.setAttribute('x2', 100);
+                l.setAttribute('y1', y); l.setAttribute('y2', y);
+                l.setAttribute('class', cls);
+                svg.appendChild(l);
+            }
+            hline(0, 'trend-grid'); hline(50, 'trend-grid'); hline(100, 'trend-grid');
+            hline(yOf(TaskSummary.TARGET), 'trend-target');
+            function addLine(coords, cls) {
+                var pl = document.createElementNS(NS, 'polyline');
+                pl.setAttribute('points', coords.map(function(c) { return c[0] + ',' + c[1]; }).join(' '));
+                pl.setAttribute('class', cls);
+                svg.appendChild(pl);
+            }
+            function series(field, cls) {
+                var seg = [], prev = null;
+                pts.forEach(function(p, i) {
+                    var v = p[field];
+                    if (p.isFuture || v === null) {
+                        if (seg.length > 1) addLine(seg, 'trend-line ' + cls);
+                        seg = []; prev = null;
+                        return;
+                    }
+                    var c = [xOf(i), yOf(v)];
+                    if (p.inProgress) {
+                        if (seg.length > 1) addLine(seg, 'trend-line ' + cls);
+                        if (prev) addLine([prev, c], 'trend-line ' + cls + ' is-running');
+                        seg = []; prev = null;
+                    } else {
+                        seg.push(c); prev = c;
+                    }
+                    var dot = el('span', 'trend-dot ' + cls + (p.inProgress ? ' is-running' : ''));
+                    dot.style.left = c[0] + '%';
+                    dot.style.top = c[1] + '%';
+                    area.appendChild(dot);
+                });
+                if (seg.length > 1) addLine(seg, 'trend-line ' + cls);
+            }
+            series('onTimePct', 'is-ontime');
+            series('pct', 'is-done');
+            area.insertBefore(svg, area.firstChild);
+            plot.appendChild(area);
+            card.appendChild(plot);
+
+            var xAxis = el('div', 'trend-x');
+            xAxis.setAttribute('aria-hidden', 'true');
+            pts.forEach(function(p, i) {
+                var minor = (n - 1 - i) % 3 !== 0; // on phones only every third label fits
+                var l = el('span', (minor ? 'is-minor' : '') + (i === n - 1 ? ' is-active' : ''), p.label);
+                l.style.left = xOf(i) + '%';
+                xAxis.appendChild(l);
+            });
+            card.appendChild(xAxis);
+            sec.appendChild(card);
+            box.appendChild(sec);
         },
 
         // When a week or month has ended, show its review once (the next time the app is opened)

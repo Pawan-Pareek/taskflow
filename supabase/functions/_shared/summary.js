@@ -170,6 +170,73 @@
         };
     }
 
+    // ---- trend over the last N weeks / months ----
+    // On time = finished on or before its due date, out of the tasks (and goals) due in that period.
+    function countOnTime(tasks, s, e, tz) {
+        var due = 0, onTime = 0;
+        for (var i = 0; i < tasks.length; i++) {
+            var t = tasks[i];
+            if (kindOf(t) === 'custom') continue;
+            var d = t.dueDate || '';
+            if (!d || d < s || d > e) continue;
+            due++;
+            var fin = finishedDay(t, tz);
+            if (fin && fin <= d) onTime++;
+        }
+        return { due: due, onTime: onTime };
+    }
+
+    function shiftPeriod(kind, anchor, n) {
+        if (kind === 'week') return addDays(weekStart(anchor), 7 * n);
+        var d = parse(anchor);
+        return fmt(new Date(d.getFullYear(), d.getMonth() + n, 1));
+    }
+
+    // One point per period, oldest first, ending with the period that contains `anchor`.
+    // Periods with nothing planned have pct null (drawn as a gap, not as 0%).
+    function buildTrend(tasks, kind, anchor, opts, count) {
+        opts = opts || {};
+        count = count || 12;
+        var points = [];
+        for (var i = count - 1; i >= 0; i--) {
+            var a = shiftPeriod(kind, anchor, -i);
+            var s = buildSummary(tasks, kind, a, opts);
+            var o = countOnTime(tasks, s.start, s.end, opts.tz || '');
+            var d = parse(s.start);
+            points.push({
+                key: s.start, start: s.start, end: s.end,
+                label: kind === 'week' ? MONTH_NAMES[d.getMonth()] + ' ' + d.getDate() : MONTH_NAMES[d.getMonth()],
+                longLabel: kind === 'week' ? 'Week of ' + MONTH_NAMES[d.getMonth()] + ' ' + d.getDate() : FULL_MONTHS[d.getMonth()] + ' ' + d.getFullYear(),
+                planned: s.planned, done: s.done, pct: s.pct,
+                due: o.due, onTime: o.onTime, onTimePct: pctOf(o.onTime, o.due),
+                inProgress: s.inProgress, isFuture: s.isFuture
+            });
+        }
+        return { kind: kind, points: points, change: trendChange(points) };
+    }
+
+    // Compare the average completion of the last 4 finished periods with the 4 before them.
+    // { direction: 'up' | 'down' | 'steady', delta, window } or null when there is not enough history.
+    function trendChange(points) {
+        var closed = points.filter(function (p) { return !p.inProgress && !p.isFuture && p.pct !== null; });
+        if (closed.length < 2) return null;
+        var size = Math.min(4, Math.floor(closed.length / 2));
+        var recent = closed.slice(-size), previous = closed.slice(-2 * size, -size);
+        var avg = function (arr) { return arr.reduce(function (n, p) { return n + p.pct; }, 0) / arr.length; };
+        var delta = Math.round(avg(recent) - avg(previous));
+        return { direction: delta >= 3 ? 'up' : (delta <= -3 ? 'down' : 'steady'), delta: delta, window: size };
+    }
+
+    function describeTrend(trend) {
+        var c = trend.change;
+        var noun = trend.kind === 'month' ? 'month' : 'week';
+        if (!c) return { direction: 'none', text: 'Not enough history yet' };
+        var span = c.window === 1 ? 'last ' + noun : 'last ' + c.window + ' ' + noun + 's';
+        if (c.direction === 'up') return { direction: 'up', text: 'Up ' + c.delta + ' points, ' + span };
+        if (c.direction === 'down') return { direction: 'down', text: 'Down ' + Math.abs(c.delta) + ' points, ' + span };
+        return { direction: 'steady', text: 'Steady, ' + span };
+    }
+
     function periodLabel(kind, anchor) {
         if (kind === 'month') { var d = parse(anchor); return FULL_MONTHS[d.getMonth()] + ' ' + d.getFullYear(); }
         var s = parse(weekStart(anchor)), e = parse(weekEnd(anchor));
@@ -278,6 +345,7 @@
     root.TaskSummary = {
         TARGET: TARGET,
         buildSummary: buildSummary, describe: describe, pushText: pushText, tierOf: tierOf,
+        buildTrend: buildTrend, describeTrend: describeTrend,
         dates: { fmt: fmt, parse: parse, addDays: addDays, weekStart: weekStart, weekEnd: weekEnd, monthStart: monthStart, monthEnd: monthEnd, dayOf: dayOf },
         periodLabel: periodLabel
     };

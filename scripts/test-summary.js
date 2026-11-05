@@ -146,4 +146,76 @@ test('push text is short and names the period', () => {
     assert.ok(p.body.length < 220, 'body too long: ' + p.body.length);
 });
 
+// ---- trend ----
+// n tasks due on the Monday of the week `weeksAgo` before 2026-11-02, `done` of them finished that day
+function weekTasks(weeksAgo, n, done, late) {
+    const mon = D.addDays('2026-11-02', -7 * weeksAgo);
+    const out = [];
+    for (let i = 0; i < n; i++) {
+        const finished = i < done;
+        out.push(task({ dueDate: mon, completed: finished, completedAt: finished ? at(late && i === 0 ? D.addDays(mon, 2) : mon) : undefined }));
+    }
+    return out;
+}
+
+test('trend: 12 points, oldest first, ending with the current week', () => {
+    const tr = S.buildTrend([], 'week', '2026-11-04', { today: '2026-11-04' });
+    assert.strictEqual(tr.points.length, 12);
+    assert.strictEqual(tr.points[11].start, '2026-11-02');
+    assert.strictEqual(tr.points[0].start, D.addDays('2026-11-02', -77));
+    assert.strictEqual(tr.points[11].inProgress, true);
+    assert.strictEqual(tr.points[11].label, 'Nov 2');
+});
+
+test('trend: empty weeks are gaps, not zero', () => {
+    const tr = S.buildTrend(weekTasks(1, 4, 2), 'week', '2026-11-04', { today: '2026-11-04' });
+    assert.strictEqual(tr.points[10].pct, 50);
+    assert.strictEqual(tr.points[9].pct, null);
+});
+
+test('trend: rising completion reads as up, falling as down, flat as steady', () => {
+    const today = { today: '2026-11-04' };
+    const rising = [].concat(weekTasks(8, 10, 4), weekTasks(7, 10, 4), weekTasks(6, 10, 5), weekTasks(5, 10, 5),
+        weekTasks(4, 10, 8), weekTasks(3, 10, 8), weekTasks(2, 10, 9), weekTasks(1, 10, 9));
+    const up = S.buildTrend(rising, 'week', '2026-11-04', today);
+    assert.strictEqual(up.change.direction, 'up');
+    assert.strictEqual(up.change.delta, 40); // (85 avg) - (45 avg)
+    assert.strictEqual(up.change.window, 4);
+    assert.ok(/^Up 40 points, last 4 weeks$/.test(S.describeTrend(up).text));
+
+    const falling = [].concat(weekTasks(2, 10, 9), weekTasks(1, 10, 3));
+    assert.strictEqual(S.buildTrend(falling, 'week', '2026-11-04', today).change.direction, 'down');
+
+    const flat = [].concat(weekTasks(2, 10, 7), weekTasks(1, 10, 7));
+    assert.strictEqual(S.buildTrend(flat, 'week', '2026-11-04', today).change.direction, 'steady');
+});
+
+test('trend: the running week is not used for up / down', () => {
+    const t = [].concat(weekTasks(2, 10, 5), weekTasks(1, 10, 5), weekTasks(0, 10, 10));
+    assert.strictEqual(S.buildTrend(t, 'week', '2026-11-04', { today: '2026-11-04' }).change.direction, 'steady');
+});
+
+test('trend: not enough history says so', () => {
+    const tr = S.buildTrend(weekTasks(1, 4, 2), 'week', '2026-11-04', { today: '2026-11-04' });
+    assert.strictEqual(tr.change, null);
+    assert.strictEqual(S.describeTrend(tr).direction, 'none');
+});
+
+test('trend: on time counts tasks finished by their due date', () => {
+    const tr = S.buildTrend(weekTasks(1, 4, 3, true), 'week', '2026-11-04', { today: '2026-11-04' }); // 1 of the 3 finished late
+    const p = tr.points[10];
+    assert.strictEqual(p.due, 4);
+    assert.strictEqual(p.onTime, 2);
+    assert.strictEqual(p.onTimePct, 50);
+    assert.strictEqual(p.pct, 75); // still 3 of 4 completed that week
+});
+
+test('trend: monthly points are calendar months', () => {
+    const tr = S.buildTrend([], 'month', '2026-11-15', { today: '2026-11-15' });
+    assert.strictEqual(tr.points.length, 12);
+    assert.strictEqual(tr.points[11].start, '2026-11-01');
+    assert.strictEqual(tr.points[0].start, '2025-12-01');
+    assert.strictEqual(tr.points[11].label, 'Nov');
+});
+
 console.log('\n' + passed + ' tests passed');
