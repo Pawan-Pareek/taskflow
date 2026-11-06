@@ -953,3 +953,7 @@ body.habits-mode .view-tools { display: none; }
     .streak-week { width: 100%; justify-content: space-between; }
     .streak-dot { width: 30px; height: 30px; }
 }
+
+/* Habits sit below the task list on Today, so the add-task card stays near the top */
+.today-habits .habit-strip { margin: 16px 0 0; }
+.today-habits .habit-empty { padding-bottom: 8px; }

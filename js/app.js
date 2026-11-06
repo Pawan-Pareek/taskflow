@@ -2614,11 +2614,14 @@
 
         // ---- Daily streak and habits (rules in js/streak.js) ----
 
-        // Top of Today: the streak with this week's days, then a one-tap check-in for each habit
+        // Today: the streak with this week's days above the add-task card; a one-tap check-in for
+        // each habit below the task list (kept out of the way so adding a task stays near the top)
         renderTodayExtras: function() {
             var box = document.getElementById('today-extras');
-            if (!box || !window.TaskStreak) return;
+            var habitBox = document.getElementById('today-habits');
+            if (!box || !habitBox || !window.TaskStreak) return;
             box.innerHTML = '';
+            habitBox.innerHTML = '';
             if (!TaskAPI.getCurrentUser()) return;
             var today = this.getTodayStr();
             var st = TaskStreak.computeStreak(tasks, { today: today });
@@ -2711,7 +2714,7 @@
                 row.appendChild(body);
                 hb.appendChild(row);
             });
-            box.appendChild(hb);
+            habitBox.appendChild(hb);
         },
 
         // Celebrate streak milestones (7, 21, 30, 66, 100 ... days) once, on the day they are reached
