@@ -425,6 +425,50 @@
             return true;
         },
 
+        // Habits: one row per habit; the days checked in are a list on the row.
+        // null = unavailable (table not created yet)
+        listHabits: async function(userId) {
+            var c = this.getClient();
+            if (!c || !userId) return null;
+            var res = await c.from('habits').select('*').eq('user_id', userId).order('created_at', { ascending: true });
+            if (res.error) {
+                console.warn('Supabase listHabits warning (run supabase/setup-habits.sql):', res.error);
+                return null;
+            }
+            return res.data || [];
+        },
+
+        saveHabit: async function(userId, h) {
+            var c = this.getClient();
+            if (!c || !userId) return false;
+            var row = {
+                id: h.id,
+                user_id: userId,
+                name: h.name,
+                schedule: h.schedule || 'daily',
+                remind_time: h.remind_time || null,
+                tz: h.tz || null,
+                start_date: h.start_date,
+                target_days: h.target_days || 21,
+                checkins: h.checkins || [],
+                status: h.status || 'active',
+                updated_at: new Date().toISOString()
+            };
+            var res = await c.from('habits').upsert(row, { onConflict: 'id' });
+            if (res.error) {
+                console.warn('Supabase saveHabit warning (run supabase/setup-habits.sql):', res.error);
+                return false;
+            }
+            return true;
+        },
+
+        deleteHabit: async function(id) {
+            var c = this.getClient();
+            if (!c) return false;
+            var res = await c.from('habits').delete().eq('id', id);
+            return !res.error;
+        },
+
         // Notification alerts the user manages in Settings (sent by the send-notification-alerts Edge Function)
         listNotifAlerts: async function(userId) {
             var c = this.getClient();

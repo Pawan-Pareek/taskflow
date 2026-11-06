@@ -340,27 +340,15 @@
     // These live on this device (localStorage).
     var KICKOFF_KEY = 'taskflow_kickoff_day';
     var VICTORY_KEY = 'taskflow_victory_day';
-    var STREAK_KEY = 'taskflow_streak';
+    var STREAK_MILESTONE_KEY = 'taskflow_streak_milestone'; // last streak milestone celebrated ("21@2026-11-06")
+    var HABITS_KEY = 'taskflow_habits';                     // this device's copy of the habits (works offline)
+    var habits = [];
+    function activeHabits() { return habits.filter(function(h) { return h.status !== 'done' && h.status !== 'archived'; }); }
     function storeGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
     function storeSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
-    function dayBefore(dateStr) {
-        var d = parseDate(dateStr);
-        d.setDate(d.getDate() - 1);
-        return fmtDate(d);
-    }
-    function currentStreak(today) {
-        try {
-            var s = JSON.parse(storeGet(STREAK_KEY) || 'null');
-            if (s && (s.last === today || s.last === dayBefore(today))) return s.count || 0;
-        } catch (e) {}
-        return 0;
-    }
-    function bumpStreak(today) {
-        var s = null;
-        try { s = JSON.parse(storeGet(STREAK_KEY) || 'null'); } catch (e) {}
-        if (s && s.last === today) return;
-        var count = s && s.last === dayBefore(today) ? (s.count || 0) + 1 : 1;
-        storeSet(STREAK_KEY, JSON.stringify({ last: today, count: count }));
+    // The daily streak, worked out from task history (js/streak.js), so every device agrees
+    function streakNow() {
+        return window.TaskStreak ? TaskStreak.computeStreak(tasks, { today: fmtDate(new Date()) }) : { current: 0, best: 0, week: [] };
     }
     // Open dated tasks that are due today or earlier, and how many of today's are done
     function dayStatus(today) {
@@ -441,6 +429,7 @@
             this.setupHaptics();
             this.setupSidebarToggle();
             this.setupSummary();
+            this.setupHabits();
 
             // Check server and update status indicator
             this.checkSyncStatus();
@@ -488,7 +477,7 @@
                 }
                 // Opened from a weekly / monthly summary notification: show that summary
                 var openView = params.get('view');
-                if (openView === 'summary-week' || openView === 'summary-month') {
+                if (openView === 'summary-week' || openView === 'summary-month' || openView === 'habits') {
                     var rv = document.getElementById('review-modal');
                     if (rv) rv.classList.add('hidden'); // the notification already said it
                     this._reviewQueue = [];
@@ -550,6 +539,7 @@
                 this.syncCustomLists();
                 this.syncCategories();
                 this.syncSummaryPrefs();
+                this.syncHabits();
                 this.checkPeriodReview();
 
                 // Heal the cloud copy if goal types had to be restored from this device
@@ -1918,14 +1908,18 @@
                     starred: 'Starred',
                     completed: 'Completed',
                     'summary-week': 'Weekly summary',
-                    'summary-month': 'Monthly summary'
+                    'summary-month': 'Monthly summary',
+                    habits: 'My habits'
                 };
                 if (titleEl) titleEl.textContent = titles[currentFilter] || 'Tasks';
             }
 
-            // The summary views replace the task list and the add-task card
+            // The summary and habit pages replace the task list and the add-task card;
+            // the streak and today's habit check-ins sit at the top of Today
             var summaryKind = currentCategory === 'all' ? summaryKindOf(currentFilter) : '';
             document.body.classList.toggle('summary-mode', !!summaryKind);
+            document.body.classList.toggle('habits-mode', currentCategory === 'all' && currentFilter === 'habits');
+            document.body.classList.toggle('today-view', currentCategory === 'all' && currentFilter === 'today');
 
             // A list with no dates has nothing for the date filter to act on
             var dateFilterBox = document.querySelector('.date-filter-container');
@@ -1997,7 +1991,6 @@
                 SoundFX.play('check');
                 Haptics.success();
                 var today = this.getTodayStr();
-                bumpStreak(today);
 
                 var undo = { label: 'Undo', fn: function() { App.toggleTaskComplete(id); } };
                 var st = dayStatus(today);
@@ -2038,6 +2031,7 @@
             }
 
             this.persistTasks();
+            if (task.completed) this.checkStreakMilestone();
         },
 
         // Add the next occurrence of a recurring task (same details, fresh checklist, shifted reminder)
@@ -2268,6 +2262,7 @@
             this.refreshDateInputs();
             this.updateBadgeCounts();
             this.updateProgressCard();
+            this.renderTodayExtras();
             this.updateViewTitle();
             this.renderTaskList();
         },
@@ -2281,7 +2276,8 @@
                 weekly: tasks.filter(t => t.type === 'weekly' && !t.completed && goalInPeriod(t, todayStr, todayStr)).length,
                 monthly: tasks.filter(t => t.type === 'monthly' && !t.completed && goalInPeriod(t, todayStr, todayStr)).length,
                 starred: tasks.filter(t => t.starred && !t.completed).length,
-                completed: tasks.filter(t => t.completed).length
+                completed: tasks.filter(t => t.completed).length,
+                habits: activeHabits().length
             };
 
             customLists.forEach(function(l) {
@@ -2319,7 +2315,7 @@
             var el;
 
             if (st.open === 0 && st.doneToday > 0) {
-                var streak = currentStreak(today);
+                var streak = streakNow().current;
                 el = document.createElement('div');
                 el.className = 'day-card victory-card';
                 el.innerHTML = '<div class="day-card-icon">' + icon('check-circle') + '</div>' +
@@ -2464,6 +2460,10 @@
             fact(kind === 'week' ? 'Best day' : 'Best week', bestText);
             fact('Goals', s.goalsPlanned ? s.goalsDone + ' of ' + s.goalsPlanned + ' done' : 'None set');
             fact('Still open', String(s.carried.length));
+            if (window.TaskStreak && habits.length) {
+                var hs = TaskStreak.habitPeriodStats(habits, s.start, s.end, today);
+                if (hs.scheduled) fact('Habit check-ins', hs.checked + ' of ' + hs.scheduled);
+            }
             if (s.inProgress && s.planned > 0) fact('To reach ' + TaskSummary.TARGET + '%', s.needMore ? s.needMore + ' more' : 'Reached');
             box.appendChild(facts);
 
@@ -2612,6 +2612,423 @@
             box.appendChild(sec);
         },
 
+        // ---- Daily streak and habits (rules in js/streak.js) ----
+
+        // Top of Today: the streak with this week's days, then a one-tap check-in for each habit
+        renderTodayExtras: function() {
+            var box = document.getElementById('today-extras');
+            if (!box || !window.TaskStreak) return;
+            box.innerHTML = '';
+            if (!TaskAPI.getCurrentUser()) return;
+            var today = this.getTodayStr();
+            var st = TaskStreak.computeStreak(tasks, { today: today });
+            function el(tag, cls, text) {
+                var e = document.createElement(tag);
+                if (cls) e.className = cls;
+                if (text !== undefined) e.textContent = text;
+                return e;
+            }
+            var plural = function(n, word) { return n + ' ' + word + (n === 1 ? '' : 's'); };
+            var DAY_NAMES = { 1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday', 5: 'Friday', 6: 'Saturday', 0: 'Sunday' };
+
+            var card = el('div', 'streak-card' + (st.atRisk ? ' is-at-risk' : '') + (st.qualifiedToday ? ' is-safe' : ''));
+            var left = el('div', 'streak-main');
+            var flame = el('span', 'streak-icon');
+            flame.innerHTML = icon('flame');
+            left.appendChild(flame);
+            var text = el('div', 'streak-text');
+            text.appendChild(el('div', 'streak-count', st.current > 0 ? st.current + '-day streak' : 'Start a streak today'));
+            var sub;
+            if (st.qualifiedToday) {
+                sub = 'Today counts.' + (st.best > st.current ? ' Best: ' + plural(st.best, 'day') + '.' : (st.nextMilestone ? ' Next milestone: ' + st.nextMilestone + ' days.' : ''));
+            } else if (st.atRisk) {
+                sub = 'Finish ' + plural(st.need, 'more task') + ' today to keep it. This week\'s rest day was ' + DAY_NAMES[parseDate(st.restDay).getDay()] + '.';
+            } else if (st.current > 0) {
+                sub = 'Finish ' + plural(st.need, 'more task') + ' today. This week\'s rest day is still free.';
+            } else {
+                sub = 'Finish ' + plural(st.need, 'task') + ' today to start one.';
+            }
+            text.appendChild(el('div', 'streak-sub', sub));
+            left.appendChild(text);
+            card.appendChild(left);
+
+            var week = el('div', 'streak-week');
+            week.setAttribute('role', 'list');
+            var LABELS = { done: 'counted', rest: 'rest day', missed: 'missed', empty: 'nothing done', today: 'today, not counted yet', future: 'still to come' };
+            st.week.forEach(function(w) {
+                var cell = el('div', 'streak-day is-' + w.status + (w.day === today ? ' is-now' : ''));
+                cell.setAttribute('role', 'listitem');
+                cell.setAttribute('aria-label', DAY_NAMES[parseDate(w.day).getDay()] + ': ' + LABELS[w.status]);
+                var dot = el('span', 'streak-dot');
+                if (w.status === 'done') dot.innerHTML = icon('check');
+                cell.appendChild(dot);
+                cell.appendChild(el('span', 'streak-letter', w.letter));
+                week.appendChild(cell);
+            });
+            card.appendChild(week);
+            box.appendChild(card);
+
+            // Habits: check in for today
+            var list = activeHabits();
+            var hb = el('div', 'habit-strip');
+            var head = el('div', 'habit-strip-head');
+            head.appendChild(el('h3', '', 'Habits'));
+            var manage = el('button', 'btn btn-ghost btn-sm', list.length ? 'See all' : 'Start a habit');
+            manage.type = 'button';
+            manage.addEventListener('click', function() {
+                if (list.length) App.setFilter('habits'); else App.openHabitModal(null);
+            });
+            head.appendChild(manage);
+            hb.appendChild(head);
+            if (!list.length) {
+                hb.appendChild(el('p', 'habit-empty', 'Pick one small thing to do every day for 21 days, like reading 10 pages or a short walk.'));
+            }
+            list.forEach(function(h) {
+                var p = TaskStreak.habitProgress(h, today);
+                var row = el('div', 'habit-row' + (p.checkedToday ? ' is-checked' : ''));
+                var check = el('button', 'habit-check');
+                check.type = 'button';
+                check.setAttribute('role', 'checkbox');
+                check.setAttribute('aria-checked', p.checkedToday ? 'true' : 'false');
+                check.setAttribute('aria-label', 'Checked in today: ' + h.name);
+                check.disabled = !p.scheduledToday;
+                if (p.checkedToday) check.innerHTML = icon('check');
+                check.addEventListener('click', function() { App.toggleHabitToday(h.id); });
+                row.appendChild(check);
+                var body = el('div', 'habit-row-body');
+                body.appendChild(el('div', 'habit-row-name', h.name));
+                var line = !p.scheduledToday ? 'No check-in today (weekdays only)'
+                    : p.complete ? 'Challenge complete. Open My habits to keep going.'
+                    : p.onLastChance ? 'You missed yesterday. Check in today to keep your progress.'
+                    : p.run + ' of ' + p.target + ' days';
+                body.appendChild(el('div', 'habit-row-sub' + (p.onLastChance ? ' is-warning' : ''), line));
+                var bar = el('div', 'habit-bar');
+                var fill = el('div', 'habit-bar-fill');
+                fill.style.width = p.pct + '%';
+                bar.appendChild(fill);
+                body.appendChild(bar);
+                body.addEventListener('click', function() { App.setFilter('habits'); });
+                row.appendChild(body);
+                hb.appendChild(row);
+            });
+            box.appendChild(hb);
+        },
+
+        // Celebrate streak milestones (7, 21, 30, 66, 100 ... days) once, on the day they are reached
+        checkStreakMilestone: function() {
+            if (!window.TaskStreak) return;
+            var today = this.getTodayStr();
+            var st = TaskStreak.computeStreak(tasks, { today: today });
+            if (!st.isMilestone) return;
+            var key = st.current + '@' + today;
+            if (storeGet(STREAK_MILESTONE_KEY) === key) return;
+            storeSet(STREAK_MILESTONE_KEY, key);
+            Haptics.celebrate();
+            SoundFX.play('fanfare');
+            try { if (window.Confetti && !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) Confetti.burst(); } catch (e) {}
+            showToast(st.current + '-day streak. Keep it going.', 'success');
+        },
+
+        // The Habits page: progress for each habit, start new ones, finish or extend completed ones
+        renderHabitsView: function() {
+            var box = document.getElementById('habits-view');
+            if (!box || !window.TaskStreak) return;
+            box.innerHTML = '';
+            var today = this.getTodayStr();
+            function el(tag, cls, text) {
+                var e = document.createElement(tag);
+                if (cls) e.className = cls;
+                if (text !== undefined) e.textContent = text;
+                return e;
+            }
+            var list = activeHabits();
+            var max = TaskStreak.MAX_ACTIVE_HABITS;
+
+            var intro = el('div', 'habits-intro');
+            intro.appendChild(el('p', '', 'Check in on every scheduled day. One missed day is forgiven; two in a row start the 21 days over. After 21 days you can keep going to 66, about how long a habit takes to feel automatic.'));
+            var add = el('button', 'btn btn-primary', 'New habit');
+            add.type = 'button';
+            add.disabled = list.length >= max;
+            add.addEventListener('click', function() { App.openHabitModal(null); });
+            intro.appendChild(add);
+            box.appendChild(intro);
+            if (list.length >= max) box.appendChild(el('p', 'remind-hint', 'You can work on ' + max + ' habits at a time. Finish or delete one to start another.'));
+
+            if (!list.length) {
+                var empty = el('div', 'empty-state-card habits-empty');
+                var ic = el('div', 'empty-icon');
+                ic.innerHTML = icon('habit');
+                empty.appendChild(ic);
+                empty.appendChild(el('h3', '', 'No habits yet'));
+                empty.appendChild(el('p', '', 'Start with one small thing you can do every day.'));
+                box.appendChild(empty);
+            }
+
+            list.forEach(function(h) {
+                var p = TaskStreak.habitProgress(h, today);
+                var card = el('div', 'habit-card' + (p.complete ? ' is-complete' : ''));
+                var top = el('div', 'habit-card-top');
+                var titleBox = el('div', 'habit-card-title');
+                titleBox.appendChild(el('h3', '', h.name));
+                var meta = (h.schedule === 'weekdays' ? 'Weekdays' : 'Every day') + (h.remind_time ? ', reminder at ' + App.formatTime12(h.remind_time) : '');
+                titleBox.appendChild(el('div', 'habit-card-meta', meta));
+                top.appendChild(titleBox);
+                var edit = el('button', 'icon-btn');
+                edit.type = 'button';
+                edit.setAttribute('aria-label', 'Edit ' + h.name);
+                edit.title = 'Edit';
+                edit.innerHTML = icon('pencil');
+                edit.addEventListener('click', function() { App.openHabitModal(h); });
+                top.appendChild(edit);
+                card.appendChild(top);
+
+                card.appendChild(el('div', 'habit-card-progress', p.run + ' of ' + p.target + ' days'));
+                // one cell per day of the challenge
+                var grid = el('div', 'habit-grid' + (p.target > 30 ? ' is-long' : ''));
+                grid.setAttribute('aria-hidden', 'true');
+                for (var i = 0; i < p.target; i++) {
+                    var cls = i < p.run ? ' is-done' : (i === p.run && p.scheduledToday && !p.checkedToday ? ' is-next' : '');
+                    grid.appendChild(el('span', 'habit-cell' + cls));
+                }
+                card.appendChild(grid);
+
+                if (p.complete) {
+                    var done = el('div', 'habit-complete');
+                    done.appendChild(el('p', '', p.target >= 66
+                        ? 'You did it: ' + p.target + ' days. This habit is part of your routine now.'
+                        : 'You did it: 21 days in a row. Keep going to 66 days to make it stick, or finish here.'));
+                    var actions = el('div', 'btn-row');
+                    if (p.target < 66) {
+                        var more = el('button', 'btn btn-primary', 'Keep going to 66 days');
+                        more.type = 'button';
+                        more.addEventListener('click', function() {
+                            h.target_days = 66;
+                            App.saveHabit(h);
+                            showToast('Next goal: 66 days', 'success');
+                        });
+                        actions.appendChild(more);
+                    }
+                    var finish = el('button', 'btn btn-secondary', 'Mark as done');
+                    finish.type = 'button';
+                    finish.addEventListener('click', function() {
+                        h.status = 'done';
+                        App.saveHabit(h);
+                        showToast('Habit finished. Well done.', 'success');
+                    });
+                    actions.appendChild(finish);
+                    done.appendChild(actions);
+                    card.appendChild(done);
+                } else {
+                    var status = !p.scheduledToday ? 'No check-in today. This habit is for weekdays.'
+                        : p.checkedToday ? 'Checked in for today.'
+                        : p.onLastChance ? 'You missed yesterday. Check in today, or the 21 days start over.'
+                        : p.daysLeft + ' day' + (p.daysLeft === 1 ? '' : 's') + ' to go.';
+                    card.appendChild(el('p', 'habit-card-status' + (p.onLastChance ? ' is-warning' : ''), status));
+                    if (p.restarts) card.appendChild(el('p', 'remind-hint', 'Started over ' + p.restarts + ' time' + (p.restarts === 1 ? '' : 's') + '. That is part of building a habit.'));
+                    if (p.scheduledToday) {
+                        var btn = el('button', 'btn ' + (p.checkedToday ? 'btn-secondary' : 'btn-primary'), p.checkedToday ? 'Undo check-in' : 'Check in for today');
+                        btn.type = 'button';
+                        btn.addEventListener('click', function() { App.toggleHabitToday(h.id); });
+                        card.appendChild(btn);
+                    }
+                }
+                box.appendChild(card);
+            });
+
+            var finished = habits.filter(function(h) { return h.status === 'done'; });
+            if (finished.length) {
+                var sec = el('div', 'summary-section');
+                sec.appendChild(el('h4', '', 'Finished habits'));
+                var ul = el('ul', 'summary-open');
+                finished.forEach(function(h) {
+                    var li = el('li');
+                    li.appendChild(el('span', 'summary-open-title', h.name));
+                    li.appendChild(el('span', 'summary-open-date', (h.target_days || 21) + '-day challenge'));
+                    li.addEventListener('click', function() { App.openHabitModal(h); });
+                    ul.appendChild(li);
+                });
+                sec.appendChild(ul);
+                box.appendChild(sec);
+            }
+        },
+
+        formatTime12: function(hhmm) {
+            var p = String(hhmm || '').split(':');
+            var h = parseInt(p[0], 10), m = p[1] || '00';
+            if (isNaN(h)) return hhmm;
+            return (h % 12 === 0 ? 12 : h % 12) + ':' + m + (h >= 12 ? ' PM' : ' AM');
+        },
+
+        toggleHabitToday: function(id) {
+            var h = habits.find(function(x) { return x.id === id; });
+            if (!h || !window.TaskStreak) return;
+            var today = this.getTodayStr();
+            if (!TaskStreak.isScheduled(h, today)) return;
+            var list = (h.checkins || []).slice();
+            var i = list.indexOf(today);
+            if (i >= 0) {
+                list.splice(i, 1);
+                Haptics.tap();
+                SoundFX.play('uncheck');
+            } else {
+                list.push(today);
+                list.sort();
+                Haptics.success();
+                SoundFX.play('check');
+            }
+            h.checkins = list;
+            var p = TaskStreak.habitProgress(h, today);
+            this.saveHabit(h);
+            if (i < 0 && p.complete && p.run === p.target) {
+                Haptics.celebrate();
+                SoundFX.play('fanfare');
+                try { if (window.Confetti && !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) Confetti.burst(); } catch (e) {}
+                showToast(p.target + ' days of ' + h.name + '. You did it.', 'success');
+            } else if (i < 0) {
+                showToast('Checked in: day ' + p.run + ' of ' + p.target, 'success');
+            }
+        },
+
+        // Save on this device right away, then to the cloud
+        saveHabit: function(h) {
+            h.updated_at = new Date().toISOString();
+            if (!habits.some(function(x) { return x.id === h.id; })) habits.push(h);
+            storeSet(HABITS_KEY, JSON.stringify(habits));
+            this.render();
+            var u = TaskAPI.getCurrentUser();
+            if (u && window.TaskSupabase && TaskSupabase.isEnabled()) {
+                TaskSupabase.saveHabit(u.id, h).then(function(ok) {
+                    if (ok && !h.synced) { h.synced = true; storeSet(HABITS_KEY, JSON.stringify(habits)); }
+                    if (!ok && !App._habitWarned) {
+                        App._habitWarned = true;
+                        showToast('Habits are saved on this device only for now.', 'info');
+                    }
+                });
+            }
+        },
+
+        deleteHabit: function(id) {
+            habits = habits.filter(function(x) { return x.id !== id; });
+            storeSet(HABITS_KEY, JSON.stringify(habits));
+            this.render();
+            if (window.TaskSupabase && TaskSupabase.isEnabled()) TaskSupabase.deleteHabit(id);
+        },
+
+        // Load habits: this device's copy first, then the cloud copy when there is one
+        syncHabits: async function() {
+            try { habits = JSON.parse(storeGet(HABITS_KEY) || '[]') || []; } catch (e) { habits = []; }
+            this.render();
+            var u = TaskAPI.getCurrentUser();
+            if (!u || !window.TaskSupabase || !TaskSupabase.isEnabled()) return;
+            var cloud = await TaskSupabase.listHabits(u.id);
+            if (!Array.isArray(cloud)) return; // not set up in the cloud yet: keep the device copy
+            // Habits made on this device while offline are sent up; otherwise the cloud copy wins
+            var cloudIds = {};
+            cloud.forEach(function(h) { cloudIds[h.id] = true; });
+            habits.forEach(function(h) { if (!cloudIds[h.id] && !h.synced) TaskSupabase.saveHabit(u.id, h); });
+            habits = cloud.map(function(h) { h.synced = true; return h; }).concat(habits.filter(function(h) { return !cloudIds[h.id] && !h.synced; }));
+            storeSet(HABITS_KEY, JSON.stringify(habits));
+            this.render();
+        },
+
+        openHabitModal: function(h) {
+            var modal = document.getElementById('habit-modal');
+            if (!modal) return;
+            if (!h && activeHabits().length >= TaskStreak.MAX_ACTIVE_HABITS) {
+                showToast('You can work on ' + TaskStreak.MAX_ACTIVE_HABITS + ' habits at a time. Finish or delete one first.', 'info');
+                return;
+            }
+            this._editingHabit = h ? h.id : null;
+            var $ = function(id) { return document.getElementById(id); };
+            $('habit-heading').textContent = h ? 'Edit habit' : 'New habit';
+            $('btn-save-habit').textContent = h ? 'Save' : 'Start habit';
+            $('habit-name').value = h ? h.name : '';
+            $('habit-schedule').value = h ? (h.schedule || 'daily') : 'daily';
+            $('habit-remind-on').checked = !!(h && h.remind_time);
+            $('habit-remind-time').value = (h && h.remind_time) || '08:00';
+            $('habit-remind-row').classList.toggle('hidden', !(h && h.remind_time));
+            $('btn-delete-habit').classList.toggle('hidden', !h);
+            $('habit-error').classList.add('hidden');
+            modal.classList.remove('hidden');
+            setTimeout(function() { $('habit-name').focus(); }, 50);
+        },
+
+        setupHabits: function() {
+            var $ = function(id) { return document.getElementById(id); };
+            var modal = $('habit-modal');
+            if (!modal) return;
+            if (window.TimePicker) TimePicker.attachTime($('habit-remind-time'), { selectClass: 'form-select' });
+            var close = function() { modal.classList.add('hidden'); };
+            ['btn-close-habit', 'btn-cancel-habit'].forEach(function(id) { var b = $(id); if (b) b.addEventListener('click', close); });
+            $('habit-remind-on').addEventListener('change', function() {
+                $('habit-remind-row').classList.toggle('hidden', !this.checked);
+            });
+            $('habit-form').addEventListener('submit', function(e) {
+                e.preventDefault();
+                var name = $('habit-name').value.trim();
+                var err = $('habit-error');
+                if (!name) { err.textContent = 'Give the habit a name.'; err.classList.remove('hidden'); return; }
+                var remind = $('habit-remind-on').checked ? $('habit-remind-time').value : null;
+                var existing = habits.find(function(x) { return x.id === App._editingHabit; });
+                if (existing) {
+                    existing.name = name.slice(0, 60);
+                    existing.schedule = $('habit-schedule').value;
+                    existing.remind_time = remind;
+                    existing.tz = deviceTz();
+                    App.saveHabit(existing);
+                    showToast('Habit saved', 'success');
+                } else {
+                    App.saveHabit({
+                        id: 'habit_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+                        name: name.slice(0, 60),
+                        schedule: $('habit-schedule').value,
+                        remind_time: remind,
+                        tz: deviceTz(),
+                        start_date: App.getTodayStr(),
+                        target_days: TaskStreak.HABIT_TARGETS[0],
+                        checkins: [],
+                        status: 'active',
+                        created_at: new Date().toISOString()
+                    });
+                    showToast('Habit started. Day 1 is today.', 'success');
+                    if (remind && !(window.TaskPush && TaskPush.isOn())) {
+                        setTimeout(function() { showToast('Turn on notifications in Settings to get the reminder.', 'info'); }, 1800);
+                    }
+                }
+                Haptics.success();
+                close();
+            });
+            $('btn-delete-habit').addEventListener('click', function() {
+                var h = habits.find(function(x) { return x.id === App._editingHabit; });
+                if (!h || !confirm('Delete the habit "' + h.name + '" and its check-ins?')) return;
+                App.deleteHabit(h.id);
+                close();
+                showToast('Habit deleted', 'info');
+            });
+
+            // Evening streak reminder switch (saved with the summary setting)
+            var nudge = $('streak-nudge-toggle');
+            if (nudge) {
+                nudge.addEventListener('change', async function() {
+                    var u = TaskAPI.getCurrentUser();
+                    var prefs = Object.assign({}, summaryPrefs || {}, { streakNudge: nudge.checked, tz: deviceTz() });
+                    if (prefs.enabled === undefined) prefs.enabled = true;
+                    var ok = u && window.TaskSupabase && TaskSupabase.isEnabled() && await TaskSupabase.saveSummaryPrefs(u.id, prefs);
+                    if (!ok) {
+                        nudge.checked = !nudge.checked;
+                        showToast('Could not save the setting. Check your connection and try again.', 'info');
+                        return;
+                    }
+                    summaryPrefs = prefs;
+                    Haptics.tap();
+                    showToast(nudge.checked ? 'Streak reminder on' : 'Streak reminder off', 'info');
+                });
+            }
+
+            // Pick up check-ins made on another device when coming back to the app
+            document.addEventListener('visibilitychange', function() { if (!document.hidden) App.syncHabits(); });
+        },
+
         // When a week or month has ended, show its review once (the next time the app is opened)
         checkPeriodReview: function() {
             if (!window.TaskSummary || !TaskAPI.getCurrentUser() || !tasks.length) return;
@@ -2692,7 +3109,7 @@
             if (box) {
                 box.addEventListener('change', async function() {
                     var u = TaskAPI.getCurrentUser();
-                    var prefs = { enabled: box.checked, tz: deviceTz() };
+                    var prefs = Object.assign({}, summaryPrefs || {}, { enabled: box.checked, tz: deviceTz() });
                     var ok = u && window.TaskSupabase && TaskSupabase.isEnabled() && await TaskSupabase.saveSummaryPrefs(u.id, prefs);
                     if (!ok) {
                         box.checked = !box.checked;
@@ -2718,7 +3135,7 @@
                 var tz = deviceTz();
                 var enabled = p.enabled !== false; // on unless the user turned it off
                 if (tz && (p.tz !== tz || p.enabled === undefined)) {
-                    p = { enabled: enabled, tz: tz };
+                    p = Object.assign({}, p, { enabled: enabled, tz: tz });
                     TaskSupabase.saveSummaryPrefs(u.id, p);
                 }
             }
@@ -2733,7 +3150,11 @@
             var section = box.closest('.settings-section');
             // Hidden until the cloud side is set up (the in-app summary still works)
             if (section) section.classList.toggle('hidden', summaryPrefs === null);
+            var nudgeSection = document.getElementById('streak-nudge-section');
+            if (nudgeSection) nudgeSection.classList.toggle('hidden', summaryPrefs === null);
             if (!summaryPrefs) return;
+            var nudgeBox = document.getElementById('streak-nudge-toggle');
+            if (nudgeBox) nudgeBox.checked = summaryPrefs.streakNudge !== false;
             box.checked = summaryPrefs.enabled !== false;
             if (hint) {
                 var pushOn = window.TaskPush && TaskPush.isOn();
@@ -2743,6 +3164,7 @@
 
         renderTaskList: function() {
             if (currentCategory === 'all' && summaryKindOf(currentFilter)) { this.renderSummary(); return; }
+            if (currentCategory === 'all' && currentFilter === 'habits') { this.renderHabitsView(); return; }
             var container = document.getElementById('task-list');
             if (!container) return;
             container.innerHTML = '';

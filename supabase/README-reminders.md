@@ -84,5 +84,15 @@ opened after a week or month ends. With notifications on, the phone also gets th
 
 1. SQL Editor: run all of `supabase/setup-summaries.sql` (adds `completed_at`, the summary setting, a send log, and a job every 10 minutes).
 2. Deploy: `supabase functions deploy send-summaries --use-api`
-3. The counting rules live in `js/summary.js`. After editing it, run `node scripts/sync-summary.js`
+3. The counting rules live in `js/summary.js`. After editing it, run `node scripts/sync-shared.js`
    (the server uses a copy) and `node scripts/test-summary.js`.
+
+## Daily streak and habits
+
+The streak is worked out from task history, so it needs nothing extra. Habits need one table and a function:
+
+1. SQL Editor: run all of `supabase/setup-habits.sql` (the `habits` table with the own-rows rule, and a job every 5 minutes).
+2. Deploy: `supabase functions deploy send-habits --use-api`
+
+The function sends habit reminders at each habit's time, and at 7 pm a reminder when the daily streak would end tonight.
+The rules live in `js/streak.js` (tests: `node scripts/test-streak.js`); run `node scripts/sync-shared.js` after editing it.

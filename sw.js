@@ -1,4 +1,4 @@
-const CACHE_NAME = 'taskflow-pro-v6'; // v2: drops v1 entries, which also held cached cloud (Supabase) responses
+const CACHE_NAME = 'taskflow-pro-v7'; // v2: drops v1 entries, which also held cached cloud (Supabase) responses
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
@@ -8,6 +8,7 @@ const ASSETS_TO_CACHE = [
     './js/confetti.js',
     './js/api.js',
     './js/auth.js',
+    './js/streak.js',
     './js/summary.js',
     './js/app.js',
     './favicon.png',

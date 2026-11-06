@@ -879,3 +879,77 @@ body.summary-mode .view-tools { display: none; }
     .trend-plot { grid-template-columns: 34px 1fr; }
     .trend-x { margin-left: 34px; }
 }
+
+/* ==========================================================================
+   Daily streak and habits
+   ========================================================================== */
+.today-extras, .habits-view { display: none; }
+body.today-view .today-extras { display: block; }
+body.habits-mode .habits-view { display: block; }
+body.habits-mode .quick-add-card,
+body.habits-mode #task-list,
+body.habits-mode .view-tools { display: none; }
+
+/* streak card */
+.streak-card { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px 18px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px; margin-bottom: 12px; box-shadow: var(--shadow-sm); }
+.streak-main { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1 1 240px; }
+.streak-icon { width: 40px; height: 40px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--warn-soft); color: var(--warn); flex-shrink: 0; }
+.streak-icon .icon { width: 22px; height: 22px; }
+.streak-card.is-safe .streak-icon { background: rgba(26, 127, 75, 0.12); color: var(--success); }
+.streak-count { font-weight: 700; font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+.streak-sub { font-size: 0.85rem; color: var(--text-2); }
+.streak-card.is-at-risk .streak-sub { color: var(--danger); font-weight: 600; }
+.streak-week { display: flex; gap: 6px; }
+.streak-day { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.streak-dot { width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--surface-2); color: #fff; }
+.streak-dot .icon { width: 13px; height: 13px; stroke-width: 3; }
+.streak-day.is-done .streak-dot { background: var(--success); }
+.streak-day.is-rest .streak-dot { background: transparent; border: 2px dashed var(--border-strong); }
+.streak-day.is-missed .streak-dot { background: var(--danger-soft); border: 2px solid var(--danger); }
+.streak-day.is-today .streak-dot { background: transparent; border: 2px solid var(--accent); }
+.streak-day.is-future .streak-dot { background: transparent; border: 1px solid var(--border); }
+.streak-letter { font-size: 0.7rem; color: var(--muted); font-weight: 600; }
+.streak-day.is-now .streak-letter { color: var(--accent-text); }
+
+/* habit check-ins on Today */
+.habit-strip { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 10px 14px 6px; margin-bottom: 16px; box-shadow: var(--shadow-sm); }
+.habit-strip-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.habit-strip-head h3 { font-size: 0.95rem; }
+.habit-empty { font-size: 0.88rem; color: var(--text-2); padding: 2px 0 10px; }
+.habit-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--border); }
+.habit-check { width: 28px; height: 28px; border-radius: 8px; border: 2px solid var(--border-strong); display: inline-flex; align-items: center; justify-content: center; color: #fff; flex-shrink: 0; position: relative; }
+.habit-check::after { content: ""; position: absolute; inset: -8px; }
+.habit-check .icon { width: 16px; height: 16px; stroke-width: 3; }
+.habit-row.is-checked .habit-check { background: var(--success); border-color: var(--success); }
+.habit-check:disabled { opacity: 0.4; }
+.habit-row-body { flex: 1; min-width: 0; cursor: pointer; }
+.habit-row-name { font-weight: 600; font-size: 0.95rem; overflow-wrap: anywhere; }
+.habit-row.is-checked .habit-row-name { color: var(--text-2); }
+.habit-row-sub { font-size: 0.8rem; color: var(--muted); }
+.habit-row-sub.is-warning, .habit-card-status.is-warning { color: var(--danger); font-weight: 600; }
+.habit-bar { height: 4px; border-radius: var(--radius-full); background: var(--surface-2); margin-top: 6px; overflow: hidden; }
+.habit-bar-fill { height: 100%; background: var(--success); border-radius: inherit; }
+
+/* Habits page */
+.habits-intro { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px 20px; flex-wrap: wrap; margin-bottom: 14px; }
+.habits-intro p { flex: 1 1 320px; font-size: 0.92rem; color: var(--text-2); line-height: 1.55; max-width: 62ch; }
+.habits-empty { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+.habit-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; margin-bottom: 14px; box-shadow: var(--shadow-sm); }
+.habit-card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.habit-card-title h3 { font-size: 1.1rem; overflow-wrap: anywhere; }
+.habit-card-meta { font-size: 0.82rem; color: var(--muted); margin-top: 2px; }
+.habit-card-progress { font-weight: 700; margin: 12px 0 8px; font-variant-numeric: tabular-nums; }
+.habit-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 28px)); gap: 6px; margin-bottom: 12px; }
+.habit-grid.is-long { grid-template-columns: repeat(11, minmax(0, 18px)); gap: 4px; }
+.habit-cell { aspect-ratio: 1; border-radius: 6px; background: var(--surface-2); border: 1px solid var(--border); }
+.habit-grid.is-long .habit-cell { border-radius: 4px; }
+.habit-cell.is-done { background: var(--success); border-color: var(--success); }
+.habit-cell.is-next { background: transparent; border: 2px solid var(--accent); }
+.habit-card-status { font-size: 0.9rem; color: var(--text-2); margin-bottom: 10px; }
+.habit-card.is-complete { border-color: var(--success); }
+.habit-complete p { color: var(--text); font-weight: 600; margin-bottom: 10px; }
+
+@media (max-width: 560px) {
+    .streak-week { width: 100%; justify-content: space-between; }
+    .streak-dot { width: 30px; height: 30px; }
+}

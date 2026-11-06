@@ -1,6 +1,6 @@
 // TaskFlow weekly / monthly summary: pure logic, shared by the app and the server.
 // Master copy: js/summary.js. The Edge Function uses a copy in supabase/functions/_shared/
-// (run `node scripts/sync-summary.js` after editing this file).
+// (run `node scripts/sync-shared.js` after editing this file).
 //
 // How "covered" is counted (finished-day method):
 //   - A task is counted on the day it was FINISHED (completed_at), not the day it was due.
