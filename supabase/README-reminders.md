@@ -96,3 +96,16 @@ The streak is worked out from task history, so it needs nothing extra. Habits ne
 
 The function sends habit reminders at each habit's time, and at 7 pm a reminder when the daily streak would end tonight.
 The rules live in `js/streak.js` (tests: `node scripts/test-streak.js`); run `node scripts/sync-shared.js` after editing it.
+
+## Smart add (AI reads a task sentence)
+
+"I want to call Jenis at 12 pm tomorrow" becomes the task "Call Jenis", tomorrow, with a 12:00 PM reminder.
+The `parse-task` function sends the sentence to a free model on Groq; the app falls back to its own reader
+(`js/quickparse.js`, tests: `node scripts/test-quickparse.js`) whenever the AI cannot be reached.
+
+1. Groq key (free at console.groq.com): `supabase secrets set GROQ_API_KEY=... --project-ref <ref>`
+2. Deploy: `supabase functions deploy parse-task --use-api`
+3. Optional daily cap of 100 reads per user: run `supabase/setup-ai.sql`.
+
+Groq retires models from time to time. The function tries the models in `MODELS` in order and moves on when
+one is gone; list what a key can use with `GET https://api.groq.com/openai/v1/models`.

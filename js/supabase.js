@@ -425,6 +425,22 @@
             return true;
         },
 
+        // Smart add: read a task sentence with the AI (the parse-task function). Resolves to
+        // { tasks, source: 'ai' } or null (not signed in, offline, over the limit, slow or failed).
+        parseTask: async function(text, extras) {
+            var c = this.getClient();
+            if (!c) return null;
+            var call = c.functions.invoke('parse-task', { body: Object.assign({ text: text }, extras || {}) });
+            var slow = new Promise(function(resolve) { setTimeout(function() { resolve(null); }, 8000); });
+            try {
+                var res = await Promise.race([call, slow]);
+                if (!res || res.error || !res.data || !Array.isArray(res.data.tasks)) return null;
+                return res.data;
+            } catch (e) {
+                return null;
+            }
+        },
+
         // Habits: one row per habit; the days checked in are a list on the row.
         // null = unavailable (table not created yet)
         listHabits: async function(userId) {

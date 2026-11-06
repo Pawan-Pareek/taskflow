@@ -620,9 +620,170 @@
             if (quickAddInput) quickAddInput.addEventListener('input', syncAddButton);
             syncAddButton();
 
+            // ---- Smart add ----
+            // A sentence that mentions a day, a time or a repeat ("call Jenis at 12 pm tomorrow") is read first:
+            // by the AI (supabase/functions/parse-task), or on this device (js/quickparse.js) when the AI is not
+            // reachable. The result fills in the form and shows a preview; the next press of Add saves it.
+            var smartPreview = document.getElementById('smart-preview');
+            var smartPending = null; // { text, tasks, source }: what was read, waiting for Add
+            var smartBusy = false;
+
+            function smartClear() {
+                smartPending = null;
+                if (smartPreview) { smartPreview.innerHTML = ''; smartPreview.classList.add('hidden'); }
+                if (quickAddBtn) quickAddBtn.textContent = 'Add task';
+            }
+            // Put the form back to its defaults after a read task is added (so the next task starts clean)
+            function smartResetForm() {
+                ['quick-priority-select', 'quick-category-select', 'quick-repeat-select'].forEach(function(id) {
+                    var s = document.getElementById(id); if (s) s.value = '';
+                });
+                var typeSel = document.getElementById('quick-type-select');
+                if (typeSel) typeSel.value = '';
+                var due = document.getElementById('quick-due-date');
+                if (due) due.value = self.getTodayStr();
+                var rem = document.getElementById('quick-remind-at');
+                if (rem) rem.value = '';
+                self.syncDueDateInputs();
+                self.refreshDateInputs();
+            }
+            function parsedParts(t) {
+                var today = self.getTodayStr();
+                var tm = parseDate(today); tm.setDate(tm.getDate() + 1);
+                var parts = [];
+                if (t.list) parts.push(listName(t.list));
+                else if (t.type === 'weekly' || t.type === 'monthly') parts.push(t.type === 'weekly' ? 'Weekly goal' : 'Monthly goal');
+                if (t.date && !t.list) {
+                    parts.push(t.date === today ? 'Today' : t.date === fmtDate(tm) ? 'Tomorrow'
+                        : parseDate(t.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }));
+                }
+                if (t.time) parts.push('Reminder ' + App.formatTime12(t.time));
+                if (t.repeat && t.repeat !== 'none' && !t.list && (t.type || 'daily') === 'daily') parts.push(REPEAT_LABELS[t.repeat] || t.repeat);
+                if (t.priority && t.priority !== 'medium') parts.push(t.priority.charAt(0).toUpperCase() + t.priority.slice(1));
+                var cat = t.category ? categoryList.find(function(c) { return c.id === t.category; }) : null;
+                if (cat) parts.push(cat.name);
+                return parts;
+            }
+            function taskFromParsed(t) {
+                var today = self.getTodayStr();
+                var type = t.list ? 'custom' : (t.type === 'weekly' || t.type === 'monthly' ? t.type : 'daily');
+                var cat = t.category && categoryList.some(function(c) { return c.id === t.category; }) ? t.category
+                    : (currentCategory !== 'all' ? currentCategory : categoryList[0].id);
+                return {
+                    type: type, list: t.list || undefined,
+                    repeat: type === 'daily' && t.repeat && t.repeat !== 'none' ? t.repeat : '',
+                    remindAt: t.time ? fromLocalInput((t.date || today) + 'T' + t.time) : '',
+                    title: t.title, notes: '', priority: t.priority || 'medium', category: cat,
+                    dueDate: t.date || today, completed: false, starred: false, subtasks: []
+                };
+            }
+            function applyToForm(t) {
+                quickAddInput.value = t.title;
+                var typeSel = document.getElementById('quick-type-select');
+                if (typeSel) typeSel.value = t.list ? 'list:' + t.list : (t.type === 'weekly' || t.type === 'monthly' ? t.type : 'daily');
+                if (t.priority) { var p = document.getElementById('quick-priority-select'); if (p) p.value = t.priority; }
+                if (t.category) { var c = document.getElementById('quick-category-select'); if (c) c.value = t.category; }
+                var rep = document.getElementById('quick-repeat-select');
+                if (rep) rep.value = !t.list && (t.type || 'daily') === 'daily' && t.repeat && t.repeat !== 'none' ? t.repeat : 'none';
+                self.syncDueDateInputs();
+                var due = document.getElementById('quick-due-date');
+                if (due) due.value = t.date || self.getTodayStr();
+                var rem = document.getElementById('quick-remind-at');
+                if (rem) rem.value = t.time ? (t.date || self.getTodayStr()) + 'T' + t.time : '';
+                self.refreshDateInputs();
+                syncAddButton();
+            }
+            function showPreview(result, original) {
+                if (!smartPreview) return;
+                smartPreview.innerHTML = '';
+                var many = result.tasks.length > 1;
+                result.tasks.forEach(function(t) {
+                    var line = document.createElement('div');
+                    line.className = 'smart-line';
+                    var title = document.createElement('strong');
+                    title.textContent = t.title;
+                    line.appendChild(title);
+                    var parts = parsedParts(t);
+                    if (parts.length) {
+                        var info = document.createElement('span');
+                        info.textContent = parts.join(' · ');
+                        line.appendChild(info);
+                    }
+                    smartPreview.appendChild(line);
+                });
+                var foot = document.createElement('div');
+                foot.className = 'smart-foot';
+                var src = document.createElement('span');
+                src.className = 'smart-source';
+                src.textContent = (result.source === 'ai' ? 'Read by AI. ' : 'Read on this device. ') + (many ? 'Tap Add to save all ' + result.tasks.length + '.' : 'Check the details, then tap Add.');
+                foot.appendChild(src);
+                var undo = document.createElement('button');
+                undo.type = 'button';
+                undo.className = 'smart-undo';
+                undo.textContent = 'Undo';
+                undo.addEventListener('click', function() {
+                    quickAddInput.value = original;
+                    smartClear();
+                    smartResetForm();
+                    syncAddButton();
+                    quickAddInput.focus();
+                });
+                foot.appendChild(undo);
+                smartPreview.appendChild(foot);
+                smartPreview.classList.remove('hidden');
+                if (quickAddBtn) quickAddBtn.textContent = many ? 'Add ' + result.tasks.length + ' tasks' : 'Add task';
+            }
+            async function smartRead(text) {
+                smartBusy = true;
+                if (quickAddBtn) { quickAddBtn.disabled = true; quickAddBtn.textContent = 'Reading...'; }
+                var result = null;
+                var u = TaskAPI.getCurrentUser();
+                if (u && window.TaskSupabase && TaskSupabase.isEnabled() && navigator.onLine !== false) {
+                    result = await TaskSupabase.parseTask(text, {
+                        tz: deviceTz(),
+                        categories: categoryList.map(function(c) { return { id: c.id, name: c.name }; }),
+                        lists: customLists.map(function(l) { return { id: l.id, name: l.name }; })
+                    });
+                }
+                if (!result && window.QuickParse) result = QuickParse.parse(text, new Date());
+                smartBusy = false;
+                if (quickAddBtn) quickAddBtn.textContent = 'Add task';
+                var list = result && Array.isArray(result.tasks) ? result.tasks.filter(function(t) { return t && t.title; }) : [];
+                if (!list.length) { smartPending = { text: text, tasks: [], source: 'none' }; syncAddButton(); doAddTask(); return; }
+                result.tasks = list;
+                if (list.length === 1) applyToForm(list[0]);
+                smartPending = { text: quickAddInput.value.trim(), tasks: list, source: result.source };
+                showPreview(result, text);
+                syncAddButton();
+                Haptics.tap();
+            }
+            function addMany(list) {
+                list.forEach(function(t) { self.addTask(taskFromParsed(t)); });
+                quickAddInput.value = '';
+                smartClear();
+                smartResetForm();
+                syncAddButton();
+                quickAddInput.focus();
+                SoundFX.play('pop');
+                showToast(list.length + ' tasks added', 'success');
+                self.renderTaskList();
+            }
+            if (quickAddInput) {
+                quickAddInput.addEventListener('input', function() {
+                    if (!smartPending) return;
+                    // a new sentence (or an emptied box) drops the earlier reading; editing a read title keeps it
+                    if (!quickAddInput.value.trim() || smartPending.tasks.length > 1) { smartClear(); if (!quickAddInput.value.trim()) smartResetForm(); }
+                });
+            }
+
             // Single Add Task handler — called by button click OR Enter key
             function doAddTask() {
                 var text = quickAddInput ? quickAddInput.value.trim() : '';
+                if (smartBusy) return;
+
+                if (text && !smartPending && window.QuickParse && QuickParse.hasCues(text)) { smartRead(text); return; }
+                if (text && smartPending && smartPending.tasks.length > 1) { addMany(smartPending.tasks); return; }
+                var wasSmart = !!smartPending;
 
                 if (!text) {
                     if (quickAddInput) quickAddInput.focus();
@@ -668,6 +829,7 @@
                 var remindInput = document.getElementById('quick-remind-at');
                 if (remindInput) remindInput.value = '';
                 if (repeatSelect) repeatSelect.value = ''; // don't carry a repeat onto the next task
+                if (wasSmart) { smartClear(); smartResetForm(); } // values the reader filled in are for this task only
                 quickAddInput.focus();
                 SoundFX.play('pop');
                 showToast('Task added', 'success');
